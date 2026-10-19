@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="gu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>જિલ્લા આંતરીક બદલી કેમ્પ પ્રમાણપત્રો (૧૨ પેજ) - ડાયનેમિક જનરેટર</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Rasa:wght@500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- ==================== તમામ જાવાસ્ક્રિપ્ટ ફંક્શન્સ (સૌથી ઉપર જેથી ક્યારેય કપાય નહીં) ==================== -->
+    <script>
+        const STORAGE_KEY = 'badli_camp_12pages_final_v5';
+        let saveTimer;
+
+        // ૧. "સમજી ગયું" બટનથી ફોર્મ અનલોક કરવાનું ફંક્શન
+        function unlockFormNow() {
+            const overlay = document.getElementById('welcomeOverlay');
+            const wrapper = document.getElementById('mainAppWrapper');
+            if (overlay) overlay.style.display = 'none';
+            if (wrapper) {
+                wrapper.classList.remove('app-locked');
+                wrapper.style.filter = 'none';
+                wrapper.style.pointerEvents = 'auto';
+                wrapper.style.height = 'auto';
+                wrapper.style.overflow = 'visible';
+            }
+            document.body.style.overflow = 'auto';
+            try { sessionStorage.setItem('badli_ack_done_v5', 'true'); } catch(e) {}
+        }
+
+        // ૨. કલર અને બ્લેક & વ્હાઈટ પ્રિન્ટ ફંક્શન (ડાયરેક્ટ પ્રિન્ટ)
+        function printDocs(mode) {
+            unlockFormNow(); // જો લોક હોય તો પહેલા અનલોક કરે
+            if (mode === 'bw') {
+                document.body.classList.add('bw-mode');
+            } else {
+                document.body.classList.remove('bw-mode');
+            }
+            window.focus();
+            window.print();
+        }
+
+        // ૩. તારીખ ફોર્મેટ (YYYY-MM-DD -> DD/MM/YYYY)
+        function formatDateDMY(isoStr) {
+            if (!isoStr) return '';
+            const parts = isoStr.split('-');
+            return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : isoStr;
+        }
+
+        // ૪. બે તારીખ વચ્ચે વર્ષ, માસ, દિવસની ગણતરી
+        function calcYMD(startStr, endStr, deductDays = 0) {
+            if (!startStr || !endStr) return null;
+            let start = new Date(startStr);
+            let end = new Date(endStr);
+            if (isNaN(start) || isNaN(end) || end < start) return null;
+            end.setDate(end.getDate() - deductDays);
+            if (end < start) return { y: 0, m: 0, d: 0 };
+
+            let y = end.getFullYear() - start.getFullYear();
+            let m = end.getMonth() - start.getMonth();
+            let d = end.getDate() - start.getDate();
+            if (d < 0) {
+                m--;
+                d += new Date(end.getFullYear(), end.getMonth(), 0).getDate();
+            }
+            if (m < 0) { y--; m += 12; }
+            return { y, m, d };
+        }
+
+        // ૫. તમામ તારીખો અને નોકરીના ગાળાની ઓટોમેટિક ગણતરી
+        function handleDateAndCalc() {
+            document.querySelectorAll('[data-date]').forEach(inp => {
+                const key = inp.getAttribute('data-date');
+                const formatted = formatDateDMY(inp.value);
+                document.querySelectorAll(`[data-view="${key}"]`).forEach(el => {
+                    el.textContent = formatted || (key === 'surplusDate' ? 'લાગુ પડતું નથી' : '..................');
+                });
+            });
+
+            const appDateVal = document.getElementById('appDateInput')?.value;
+            const dobVal = document.getElementById('dobInput')?.value;
+            const schoolJoinVal = document.getElementById('schoolJoinInput')?.value;
+            const relieveVal = document.getElementById('relieveDateInput')?.value;
+
+            if (dobVal && appDateVal) {
+                const ageObj = calcYMD(dobVal, appDateVal, 0);
+                if (ageObj) {
+                    document.getElementById('ageInput').value = ageObj.y;
+                    document.querySelectorAll('[data-view="age"]').forEach(el => el.textContent = ageObj.y);
+                }
+            }
+
+            let totalLeave = 0;
+            document.querySelectorAll('#leaveTbody tr.leave-item-row').forEach(tr => {
+                const d1 = tr.querySelector('.lv-from')?.value;
+                const d2 = tr.querySelector('.lv-to')?.value;
+                const spanTxt = tr.querySelector('.lv-range-text');
+                const daysCell = tr.querySelector('.leave-days');
+                if (d1 && d2) {
+                    const diff = Math.floor((new Date(d2) - new Date(d1)) / 86400000) + 1;
+                    const validDays = diff > 0 ? diff : 0;
+                    daysCell.textContent = validDays;
+                    totalLeave += validDays;
+                    if (spanTxt) spanTxt.textContent = `${formatDateDMY(d1)} થી ${formatDateDMY(d2)}`;
+                }
+            });
+            const totalCell = document.getElementById('totalLeaveDaysCell');
+            if (totalCell) totalCell.textContent = totalLeave;
+
+            if (schoolJoinVal && appDateVal) {
+                const lenObj = calcYMD(schoolJoinVal, appDateVal, totalLeave);
+                if (lenObj) {
+                    document.getElementById('lenYInput').value = lenObj.y;
+                    document.getElementById('lenMInput').value = lenObj.m;
+                    document.getElementById('lenDInput').value = lenObj.d;
+                    document.querySelectorAll('[data-view="lenY"]').forEach(el => el.textContent = lenObj.y);
+                    document.querySelectorAll('[data-view="lenM"]').forEach(el => el.textContent = lenObj.m);
+                    document.querySelectorAll('[data-view="lenD"]').forEach(el => el.textContent = lenObj.d);
+                }
+            }
+
+            const endForCert = relieveVal || appDateVal;
+            const certSpan = document.getElementById('certPeriodSpan');
+            if (certSpan) {
+                if (schoolJoinVal && endForCert) {
+                    const certObj = calcYMD(schoolJoinVal, endForCert, 0);
+                    certSpan.textContent = certObj ? `${certObj.y} વર્ષ, ${certObj.m} માસ, ${certObj.d} દિવસ` : '..................';
+                } else {
+                    certSpan.textContent = '..................';
+                }
+            }
+            triggerAutoSave();
+        }
+
+        // ૬. પેજ Show/Hide અને ટેબલ Row Add/Delete ફંક્શન્સ
+        function togglePage(pageId, show) {
+            const pg = document.getElementById(pageId);
+            if (pg) pg.style.display = show ? 'block' : 'none';
+            triggerAutoSave();
+        }
+
+        function selectAllPages(selectAll) {
+            document.querySelectorAll('.page-chk').forEach(chk => {
+                chk.checked = selectAll;
+                togglePage(chk.getAttribute('data-page'), selectAll);
+            });
+        }
+
+        function renumberTable(tableId) {
+            document.querySelectorAll(`#${tableId} tbody tr`).forEach((tr, i) => { tr.cells[0].textContent = i + 1; });
+        }
+
+        function deleteRow(btn) {
+            const table = btn.closest('table');
+            btn.closest('tr').remove();
+            if (table.id === 'checklistTable' || table.id === 'serviceTable') renumberTable(table.id);
+            handleDateAndCalc();
+        }
+
+        function addChecklistRow() {
+            const tbody = document.querySelector('#checklistTable tbody');
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td style="text-align:center;">${tbody.rows.length + 1}</td><td>નવો પુરાવો (અહીં લખો)</td><td style="text-align:center;">હા</td><td></td><td class="no-print" contenteditable="false"><button type="button" class="btn btn-danger" onclick="deleteRow(this)">X</button></td>`;
+            tbody.appendChild(tr);
+            triggerAutoSave();
+        }
+
+        function addServiceRow() {
+            const tbody = document.querySelector('#serviceTable tbody');
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td style="text-align:center;">${tbody.rows.length + 1}</td><td>તારીખ થી તારીખ</td><td>શાળાનું નામ, તાલુકો, જિલ્લો</td><td>હુકમ નં.</td><td>તારીખ</td><td style="text-align:center;">બદલી</td><td class="no-print" contenteditable="false"><button type="button" class="btn btn-danger" onclick="deleteRow(this)">X</button></td>`;
+            tbody.appendChild(tr);
+            triggerAutoSave();
+        }
+
+        function addLeaveRow() {
+            const tbody = document.getElementById('leaveTbody');
+            const nilRow = tbody.querySelector('.nil-row');
+            if (nilRow) nilRow.remove();
+            const tr = document.createElement('tr');
+            tr.className = 'leave-item-row';
+            tr.innerHTML = `<td><div class="no-print" contenteditable="false" style="display:flex; gap:5px; align-items:center; margin-bottom:4px;"><input type="date" class="lv-from" onchange="handleDateAndCalc()"> થી <input type="date" class="lv-to" onchange="handleDateAndCalc()"></div><span class="lv-range-text">તારીખ પસંદ કરો</span></td><td style="text-align:center;" class="leave-days">0</td><td style="text-align:center;">કપાત પગારી રજા</td><td class="no-print" contenteditable="false"><button type="button" class="btn btn-danger" onclick="deleteRow(this)">X</button></td>`;
+            tbody.appendChild(tr);
+            triggerAutoSave();
+        }
+
+        // ૭. ઓટો-સેવ અને રીસેટ ફંક્શન્સ
+        function triggerAutoSave() {
+            clearTimeout(saveTimer);
+            saveTimer = setTimeout(saveAllData, 350);
+        }
+
+        function saveAllData() {
+            try {
+                const formValues = {}, dateValues = {}, pageChecks = {};
+                document.querySelectorAll('[data-bind]').forEach(i => formValues[i.getAttribute('data-bind')] = i.value);
+                document.querySelectorAll('[data-date]').forEach(i => dateValues[i.getAttribute('data-date')] = i.value);
+                document.querySelectorAll('.page-chk').forEach(c => pageChecks[c.getAttribute('data-page')] = c.checked);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify({ formValues, dateValues, pageChecks }));
+                const timeStr = new Date().toLocaleTimeString('gu-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                const badge = document.getElementById('saveStatus');
+                if (badge) badge.innerHTML = `✅ સેવ થયું: ${timeStr}`;
+            } catch(e) {}
+        }
+
+        function clearToBlankForm() {
+            if (confirm('શું તમારે નમૂના રૂપ ડેટા ક્લિયર કરીને તમારો નવો ડેટા ભરવા માટે ફોર્મ ખાલી કરવું છે?')) {
+                document.querySelectorAll('[data-bind]').forEach(inp => {
+                    const key = inp.getAttribute('data-bind');
+                    inp.value = (key === 'prevBenefit') ? 'ના' : '';
+                    document.querySelectorAll(`[data-view="${key}"]`).forEach(el => el.textContent = inp.value || '..................');
+                });
+                document.querySelectorAll('[data-date]').forEach(inp => {
+                    if (inp.getAttribute('data-date') !== 'appDate') inp.value = '';
+                });
+                handleDateAndCalc();
+                saveAllData();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        }
+
+        // ૮. પેજ ૫ થી ૯ (સ્વઘોષણાના ૫ પેજ) ડાયનેમિક રીતે જનરેટ કરવાનું ફંક્શન
+        function buildDeclarationPages() {
+            const declConfigs = [
+                {
+                    pageNum: 5, title: '(દંપતિ કિસ્સા અગ્રતા)',
+                    para: 'આથી હું જાહેર કરું છું કે ગુજરાત સરકારના શિક્ષણ વિભાગના પ્રાથમિક શિક્ષક બદલીના પરિપત્ર અને ઠરાવ મુજબ દંપતિ કિસ્સામાં અગ્રતા મેળવી બદલી કરાવવા ઇચ્છું છું, જેથી જાહેર કરું છું કે મેં આ અગાઉ ક્યારે પણ દંપતિ કિસ્સામાં અગ્રતા મેળવીને બદલીનો લાભ લીધેલ નથી.',
+                    docs: '(૧) લગ્ન નોંધણીનું રજીસ્ટ્રારનું પ્રમાણપત્ર<br>(૨) પતિ/પત્ની જે કચેરી/અનુદાનિત શૈક્ષણિક સંસ્થામાં નોકરી કરતાં હોય તે કચેરીના વડાએ આપેલ નિયત નમુનાનું પરિશિષ્ટ -૧<br>(૩) પતિ/પત્ની જે કચેરી/અનુદાનિત શૈક્ષણિક સંસ્થામાં નોકરી કરતાં હોય તે કચેરી કેન્દ્ર/રાજ્ય સરકાર સ્થાપિત સંચાલિત /સંસ્થા સરકારના જે કાયદા/જાહેરનામાં/ઠરાવ થી નક્કી કરવામાં આવેલ હોય તે હોવા અંગેનો આધાર/પ્રમાણપત્ર<br>(૪) મુળ શાળામાં હાજર થવા કરાયેલ હુકમ<br>(૫) અન્ય (ઉત્તરોત્તર વધ બદલી કે વિભાજનથી બદલી આવેલ હોય તે અંગેના હાજર-મુક્તના આધારો)'
+                },
+                {
+                    pageNum: 6, title: '(દિવ્યાંગ કિસ્સા અગ્રતા)',
+                    para: 'આથી હું જાહેર કરું છું કે ગુજરાત સરકારના શિક્ષણ વિભાગના પ્રાથમિક શિક્ષક બદલીના પરિપત્ર અને ઠરાવ મુજબ દિવ્યાંગ કિસ્સામાં અગ્રતા મેળવી બદલી કરાવવા ઇચ્છું છું, જેથી જાહેર કરું છું કે મેં આ અગાઉ ક્યારે પણ દિવ્યાંગ કિસ્સામાં અગ્રતા મેળવીને બદલીનો લાભ લીધેલ નથી.',
+                    docs: '(૧) દિવ્યાંગતાની ટકાવારી દર્શાવતું સિવીલ સર્જનશ્રીનું પ્રમાણપત્ર<br>(૨) મૂળ શાળામાં હાજર થવા કરાયેલ હુકમ<br>(૩) અન્ય ઉત્તરોત્તર વધ બદલી કે વિભાજન બદલી આવેલ હોય તો તે અંગેના હુકમો અને હાજર - મુક્તના આધારો'
+                },
+                {
+                    pageNum: 7, title: '(વાલ્મીકી કિસ્સા અગ્રતા)',
+                    para: 'આથી હું જાહેર કરું છું કે ગુજરાત સરકારના શિક્ષણ વિભાગના પ્રાથમિક શિક્ષક બદલીના પરિપત્ર અને ઠરાવ મુજબ વાલ્મીકી કિસ્સામાં અગ્રતા મેળવી બદલી કરાવવા ઇચ્છું છું, જેથી જાહેર કરું છું કે મેં આ અગાઉ ક્યારે પણ વાલ્મીકી કિસ્સામાં અગ્રતા મેળવીને બદલીનો લાભ લીધેલ નથી.',
+                    docs: '(૧) વાલ્મીકી હોવા બાબતનું સક્ષમ સત્તાધિકારીનું પ્રમાણપત્ર<br>(૨) મૂળ શાળામાં હાજર થવા કરાયેલ હુકમ<br>(૩) અન્ય ઉત્તરોત્તર વધ બદલી કે વિભાજન બદલી આવેલ હોય તો તે અંગેના હુકમો અને હાજર - મુક્તના આધારો'
+                },
+                {
+                    pageNum: 8, title: '(વિધવા/વિધૂર કિસ્સા અગ્રતા)',
+                    para: 'આથી હું જાહેર કરું છું કે ગુજરાત સરકારના શિક્ષણ વિભાગના પ્રાથમિક શિક્ષક બદલીના પરિપત્ર અને ઠરાવ મુજબ વિધવા/વિધૂર કિસ્સામાં અગ્રતા મેળવી બદલી કરાવવા ઇચ્છું છું, જેથી જાહેર કરું છું કે મેં આ અગાઉ ક્યારે પણ વિધવા/વિધૂર કિસ્સામાં અગ્રતા મેળવીને બદલીનો લાભ લીધેલ નથી, પુન: લગ્ન કરેલ નથી.',
+                    docs: '(૧) ફક્ત વિધવા કિસ્સામાં સક્ષમ અધિકારીશ્રીનું પ્રમાણપત્ર<br>(૨) રેશનકાર્ડ<br>(૩) પતિ/પત્નીના મરણનો દાખલો<br>(૪) મૂળ શાળામાં હાજર થવા કરાયેલ હુકમ<br>(૫) અન્ય ઉત્તરોત્તર વધ બદલી કે વિભાજન બદલી આવેલ હોય તો તે અંગેના હુકમો અને હાજર - મુક્તના આધારો'
+                },
+                {
+                    pageNum: 9, title: '(સિનીયોરીટી)',
+                    para: 'આથી હું જાહેર કરું છું કે ગુજરાત સરકારના શિક્ષણ વિભાગના પ્રાથમિક શિક્ષક બદલીના પરિપત્ર અને ઠરાવ મુજબ સિનિયોરિટીના આધારે બદલી કરાવવા ઇચ્છું છું.',
+                    docs: '(૧) મૂળ શાળામાં હાજર થવા કરાયેલ હુકમ<br>(૨) જો વિકલ્પ મેળવી ઉચ્ચત્તર પ્રાથમિક વિભાગમાં ગયેલ હોય તો વિકલ્પ લીધેલ હુકમની નકલ આધારો<br>(૩) અન્ય ઉત્તરોત્તર વધ બદલી કે વિભાજન બદલી આવેલ હોય તો તે અંગેના હુકમો અને હાજર - મુક્તના આધારો'
+                }
+            ];
+
+            const holder = document.getElementById('declarationsHolder');
+            if (!holder) return;
+            holder.innerHTML = declConfigs.map(cfg => `
+                <div class="a4-page" id="page${cfg.pageNum}">
+                    <div class="ornate-border">
+                        <span class="page-badge no-print">Page ${cfg.pageNum} / 12</span>
+                        <div>
+                            <div class="doc-title" style="margin-bottom: 4px;">સ્વઘોષણા (Self-Declaration)</div>
+                            <div class="doc-subtitle">${cfg.title}</div>
+                            <div class="doc-text" style="margin-top: 14px; line-height: 1.8;">
+                                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;આથી હું નીચે સહી કરનાર (પૂરું નામ) <span class="dyn" data-view="tName">પરબતભાઈ કરમુર</span> ઉંમર <span class="dyn" data-view="age">38</span> વર્ષ, <span class="dyn" data-view="taluka">દ્વારકા</span> તાલુકા <span class="dyn" data-view="district">દેવભૂમિ દ્વારકા</span> જિલ્લાની સરકારી <span class="dyn" data-view="school">શ્રી કોરાડા વાડી પ્રાથમિક શાળા</span> ખાતે ફરજ બજાવું છું.
+                            </div>
+                            <div class="doc-text" style="margin-top: 12px; line-height: 1.8;">
+                                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${cfg.para}
+                            </div>
+                            <div class="doc-text" style="margin-top: 12px;">
+                                <b>મેં મારા દ્વારા આપવામાં આવેલ માહિતી અને અરજી અનુસંધાને જોડેલ દસ્તાવેજો:</b>
+                                <div style="margin-top: 6px; padding-left: 12px; line-height: 1.75;">${cfg.docs}</div>
+                            </div>
+                            <div class="doc-text" style="margin-top: 14px; line-height: 1.75;">
+                                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;મારી જાણ મુજબ અને મારી માન્યતા મુજબ સાચા છે અને તેમાં કોઈ બાબત છૂપાયેલ નથી. હું એ જાણું છું કે, ખોટી માહિતી કે દસ્તાવેજ રજૂ કરવા એ કાયદા હેઠળ શિક્ષાને પાત્ર છે અને આવા સંજોગોમાં ખોટી માહિતી ખોટા દસ્તાવેજના આધારે મને મળેલ લાભ રદ થવાને પાત્ર છે.
+                            </div>
+                        </div>
+                        <div class="doc-text" style="line-height: 2.0; margin-bottom: 10px;">
+                            સહી:- _______________________________<br>
+                            પુરૂં નામ:- <span class="dyn" data-view="tName">પરબતભાઈ કરમુર</span><br>
+                            હાલની શાળાનું સરનામું:- <span class="dyn" data-view="school">શ્રી કોરાડા વાડી પ્રાથમિક શાળા</span>, તા. <span class="dyn" data-view="taluka">દ્વારકા</span>, જિ. <span class="dyn" data-view="district">દેવભૂમિ દ્વારકા</span><br>
+                            ઓળખના પુરાવાનો નંબર:- <span class="dyn" data-view="idProof">ABCDE1234F</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // ૯. પેજ લોડ થાય ત્યારે ઇનિશિયલાઇઝેશન
+        window.addEventListener('DOMContentLoaded', function() {
+            buildDeclarationPages();
+
+            document.querySelectorAll('[data-bind]').forEach(input => {
+                input.addEventListener('input', function() {
+                    const key = this.getAttribute('data-bind');
+                    const val = this.value;
+                    document.querySelectorAll(`[data-view="${key}"]`).forEach(el => {
+                        el.textContent = val || '..................';
+                    });
+                    triggerAutoSave();
+                });
+            });
+
+            try {
+                if (sessionStorage.getItem('badli_ack_done_v5') === 'true') unlockFormNow();
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (raw) {
+                    const data = JSON.parse(raw);
+                    if (data.formValues) {
+                        Object.keys(data.formValues).forEach(k => {
+                            const inp = document.querySelector(`[data-bind="${k}"]`);
+                            if (inp) {
+                                inp.value = data.formValues[k];
+                                document.querySelectorAll(`[data-view="${k}"]`).forEach(el => el.textContent = data.formValues[k] || '..................');
+                            }
+                        });
+                    }
+                    if (data.dateValues) {
+                        Object.keys(data.dateValues).forEach(k => {
+                            const inp = document.querySelector(`[data-date="${k}"]`);
+                            if (inp) inp.value = data.dateValues[k];
+                        });
+                    }
+                    if (data.pageChecks) {
+                        Object.keys(data.pageChecks).forEach(pId => {
+                            const chk = document.querySelector(`.page-chk[data-page="${pId}"]`);
+                            if (chk) {
+                                chk.checked = data.pageChecks[pId];
+                                const pg = document.getElementById(pId);
+                                if (pg) pg.style.display = data.pageChecks[pId] ? 'block' : 'none';
+                            }
+                        });
+                    }
+                }
+            } catch(e) {}
+            handleDateAndCalc();
+        });
+    </script>
+
+    <style>
+        :root {
+            --primary: #1e3a8a;
+            --bg: #f1f5f9;
+            --doc-border: #1e3a8a;
+            --doc-heading: #1e3a8a;
+            --doc-th-bg: #e0f2fe;
+        }
+        * { box-sizing: border-box; font-family: 'Rasa', serif; font-weight: 600; }
+        body { background-color: var(--bg); margin: 0; padding: 0; color: #000; overflow-x: hidden; }
+
+        .welcome-overlay {
+            position: fixed; inset: 0; background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(6px); z-index: 99999;
+            display: flex; align-items: center; justify-content: center; padding: 20px;
+        }
+        .welcome-box {
+            background: #fff; max-width: 540px; width: 100%; border-radius: 14px;
+            padding: 26px 22px; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.45);
+            border-top: 7px solid #1e3a8a;
+        }
+        .welcome-box h3 { margin: 0 0 12px 0; font-size: 24px; color: #1e3a8a; font-weight: 700; }
+        .welcome-box p { font-size: 18px; line-height: 1.55; color: #1e293b; margin-bottom: 20px; }
+        .btn-ack {
+            background: linear-gradient(135deg, #16a34a, #15803d); color: #fff; border: none;
+            padding: 12px 30px; font-size: 19px; font-weight: 700; border-radius: 8px;
+            cursor: pointer; box-shadow: 0 4px 12px rgba(22, 163, 74, 0.4);
+        }
+        .app-locked { height: 100vh; overflow: hidden; filter: blur(5px); pointer-events: none; }
+
+        .sticky-top-bar {
+            position: sticky; top: 0; z-index: 1000;
+            background: linear-gradient(90deg, #0f172a, #1e3a8a); color: #fff;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.25);
+        }
+        .ticker-wrap {
+            background: #fef08a; color: #713f12; padding: 5px 10px; font-size: 17px;
+            font-weight: 700; border-bottom: 2px solid #eab308; overflow: hidden; white-space: nowrap;
+        }
+        .ticker-move { display: inline-block; padding-left: 100%; animation: ticker 22s linear infinite; }
+        @keyframes ticker { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
+        .status-bar { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; flex-wrap: wrap; gap: 8px; }
+        .save-badge { background: #16a34a; color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 15px; }
+
+        .control-panel {
+            max-width: 1150px; margin: 14px auto; background: #fff; padding: 18px;
+            border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border-top: 5px solid var(--primary);
+        }
+        .section-title {
+            background: var(--primary); color: #fff; padding: 7px 14px; border-radius: 6px;
+            font-size: 18px; font-weight: 700; margin: 16px 0 10px 0;
+            display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;
+        }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(225px, 1fr)); gap: 10px; }
+        .form-group { display: flex; flex-direction: column; }
+        .form-group label { font-size: 15px; font-weight: 700; margin-bottom: 3px; color: #1e293b; }
+        .form-group input { padding: 7px 10px; border: 1.5px solid #94a3b8; border-radius: 6px; font-size: 16px; font-weight: 600; }
+
+        .btn {
+            padding: 7px 13px; border: none; border-radius: 6px; cursor: pointer;
+            font-weight: 700; font-size: 15px; display: inline-flex; align-items: center; gap: 5px;
+        }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-color-print { background: linear-gradient(135deg, #1e3a8a, #0284c7); color: #fff; }
+        .btn-bw-print { background: #1e293b; color: #fff; }
+        .btn-danger { background: #dc2626; color: #fff; padding: 2px 7px; font-size: 13px; }
+        .btn-reset-top { background: #dc2626; color: #fff; border: 2px solid #fecaca; }
+
+        .inline-table-bar {
+            display: flex; justify-content: space-between; align-items: center;
+            background: #eff6ff; border: 1px dashed #3b82f6; padding: 4px 10px; border-radius: 6px; margin: 4px 0;
+        }
+        .page-toggles {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+            gap: 8px; background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1;
+        }
+        .page-toggles label {
+            display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 700;
+            cursor: pointer; background: #fff; padding: 5px 8px; border-radius: 6px; border: 1px solid #e2e8f0;
+        }
+
+        .preview-wrapper { width: 100%; overflow-x: auto; padding: 10px 0 40px 0; }
+        .preview-container { display: flex; flex-direction: column; align-items: center; gap: 22px; transform-origin: top center; }
+        .a4-page {
+            width: 210mm; height: 297mm; background: #fff; padding: 9mm;
+            box-shadow: 0 0 16px rgba(0,0,0,0.2); position: relative;
+            page-break-after: always; page-break-inside: avoid; overflow: hidden; flex-shrink: 0;
+        }
+        .ornate-border {
+            border: 4px double var(--doc-border); outline: 1.5px solid var(--doc-border); outline-offset: -7px;
+            height: 100%; width: 100%; padding: 14px 18px;
+            display: flex; flex-direction: column; justify-content: space-between; position: relative;
+        }
+        .page-badge { position: absolute; top: 4px; right: 10px; font-size: 12px; color: #64748b; }
+
+        .doc-title { text-align: center; font-size: 20px; font-weight: 700; color: var(--doc-heading); text-decoration: underline; margin: 2px 0 8px 0; line-height: 1.25; }
+        .doc-subtitle { text-align: center; font-size: 16.5px; font-weight: 700; color: var(--doc-heading); margin-bottom: 8px; line-height: 1.25; }
+        .top-split { display: flex; justify-content: space-between; font-size: 16px; line-height: 1.5; margin-bottom: 6px; }
+        .doc-text { font-size: 16px; line-height: 1.55; text-align: justify; font-weight: 600; }
+        .doc-table { width: 100%; border-collapse: collapse; margin: 4px 0; font-size: 15px; }
+        .doc-table th, .doc-table td { border: 1.5px solid #000; padding: 3.5px 6px; text-align: left; vertical-align: middle; font-weight: 600; }
+        .doc-table th { background-color: var(--doc-th-bg); color: var(--doc-heading); font-weight: 700; text-align: center; }
+
+        .sign-grid { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 14px; font-size: 15px; font-weight: 700; text-align: center; width: 100%; }
+        .sign-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; align-items: end; margin-top: 14px; font-size: 13.5px; font-weight: 700; text-align: center; width: 100%; }
+        .sign-line { border-top: 1.5px solid #000; padding-top: 4px; margin: 0 3px; word-wrap: break-word; }
+        .dyn { font-weight: 700; color: var(--doc-heading); padding: 0 2px; }
+
+        body.bw-mode { --doc-border: #000; --doc-heading: #000; --doc-th-bg: #f3f4f6; }
+        body.bw-mode .dyn { color: #000 !important; }
+        body.bw-mode .a4-page { filter: grayscale(100%); }
+
+        @media (max-width: 820px) {
+            .control-panel { margin: 8px; padding: 12px; }
+            .form-grid, .page-toggles { grid-template-columns: 1fr; }
+            .status-bar { flex-direction: column; text-align: center; }
+            .preview-wrapper { display: flex; justify-content: center; }
+            .preview-container { zoom: 0.43; }
+        }
+        @media (min-width: 480px) and (max-width: 820px) { .preview-container { zoom: 0.62; } }
+
+        @page { size: A4 portrait; margin: 0; }
+        @media print {
+            html, body {
+                background: #fff !important;
+                height: auto !important;
+                overflow: visible !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            .no-print, .welcome-overlay { display: none !important; }
+            #mainAppWrapper, .app-locked {
+                height: auto !important;
+                overflow: visible !important;
+                filter: none !important;
+                pointer-events: auto !important;
+            }
+            .preview-wrapper { overflow: visible !important; padding: 0 !important; display: block !important; }
+            .preview-container { zoom: 1 !important; transform: none !important; gap: 0 !important; display: block !important; }
+            .a4-page {
+                box-shadow: none !important;
+                margin: 0 auto !important;
+                width: 210mm !important;
+                height: 297mm !important;
+                page-break-after: always !important;
+                page-break-inside: avoid !important;
+            }
+            .a4-page:last-of-type { page-break-after: auto !important; }
+            .page-badge { display: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- વેલકમ નોટિફિકેશન -->
+<div class="welcome-overlay" id="welcomeOverlay">
+    <div class="welcome-box">
+        <h3>🔔 મહત્વપૂર્ણ સૂચના (નમૂના રૂપ ડેટા)</h3>
+        <p>
+            આ ફોર્મમાં હાલમાં ભરેલો ડેટા માત્ર <b>નમૂના રૂપ (Sample Data)</b> છે.<br><br>
+            તમે એકવાર તમામ ૧૨ પેજનો નમૂનો જોઈ લો, ત્યારબાદ જમણી તરફ ઉપરના કોર્નરમાં આપેલા લાલ રંગના <b>"🗑️ ડેટા રીસેટ / ક્લિયર"</b> ઓપ્શનથી ક્લિયર કરી તમારો ડેટા ભરી શકો છો.
+        </p>
+        <button type="button" class="btn-ack" onclick="unlockFormNow()">👍 સમજી ગયું (ફોર્મ ખોલો)</button>
+    </div>
+</div>
+
+<div id="mainAppWrapper" class="app-locked">
+
+    <!-- ટોપ સ્ટીકી ટીકર અને ઓટો-સેવ બાર -->
+    <div class="sticky-top-bar no-print">
+        <div class="ticker-wrap">
+            <div class="ticker-move">
+                🌟 સૌજન્ય: પરબતભાઈ કરમુર | શ્રી કોરાડા વાડી પ્રાથમિક શાળા | મોબાઈલ નંબર: 95863 11704 🌟 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+                📌 જિલ્લા આંતરીક બદલી કેમ્પ પ્રમાણપત્રો (તમામ ૧૨ પેજ) - ઓટોમેટિક ડેટા અને તારીખ ગણતરી સાથેનું ડાયનેમિક ફોર્મ 📌
+            </div>
+        </div>
+        <div class="status-bar">
+            <div style="font-size: 18px; font-weight: 700;">📑 જિલ્લા આંતરીક બદલી કેમ્પ (૧૨ પેજ જનરેટર)</div>
+            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center;">
+                <div class="save-badge" id="saveStatus">💾 ઓટો-સેવ સક્રિય</div>
+                <button type="button" class="btn btn-color-print" onclick="printDocs('color')">🎨 કલર પ્રિન્ટ / PDF</button>
+                <button type="button" class="btn btn-bw-print" onclick="printDocs('bw')">⚫⚪ બ્લેક & વ્હાઈટ પ્રિન્ટ</button>
+                <button type="button" class="btn btn-reset-top" onclick="clearToBlankForm()">🗑️ ડેટા રીસેટ / ક્લિયર</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- કંટ્રોલ પેનલ (ફોર્મ) -->
+    <div class="control-panel no-print" id="formPanel">
+
+        <div class="section-title">
+            <span>૧. બદલીના ૧૨ પેજમાંથી કયા-કયા પેજ પ્રિન્ટ કરવા છે?</span>
+            <div>
+                <button type="button" class="btn" style="padding:3px 10px; font-size:14px; background:#fff; color:#1e3a8a;" onclick="selectAllPages(true)">બધા પસંદ કરો</button>
+                <button type="button" class="btn" style="padding:3px 10px; font-size:14px; background:#e2e8f0; color:#000;" onclick="selectAllPages(false)">બધા કાઢો</button>
+            </div>
+        </div>
+        <div class="page-toggles">
+            <label><input type="checkbox" class="page-chk" data-page="page1" checked onchange="togglePage('page1', this.checked)"> પેજ ૧: અરજી પત્રક</label>
+            <label><input type="checkbox" class="page-chk" data-page="page2" checked onchange="togglePage('page2', this.checked)"> પેજ ૨: ચેકલીસ્ટ</label>
+            <label><input type="checkbox" class="page-chk" data-page="page3" checked onchange="togglePage('page3', this.checked)"> પેજ ૩: ઓનલાઈન પ્રમાણપત્ર</label>
+            <label><input type="checkbox" class="page-chk" data-page="page4" checked onchange="togglePage('page4', this.checked)"> પેજ ૪: પરિશિષ્ટ-૧ (દંપતી)</label>
+            <label><input type="checkbox" class="page-chk" data-page="page5" checked onchange="togglePage('page5', this.checked)"> પેજ ૫: સ્વઘોષણા (દંપતી કિસ્સા)</label>
+            <label><input type="checkbox" class="page-chk" data-page="page6" checked onchange="togglePage('page6', this.checked)"> પેજ ૬: સ્વઘોષણા (દિવ્યાંગ કિસ્સા)</label>
+            <label><input type="checkbox" class="page-chk" data-page="page7" checked onchange="togglePage('page7', this.checked)"> પેજ ૭: સ્વઘોષણા (વાલ્મીકી કિસ્સા)</label>
+            <label><input type="checkbox" class="page-chk" data-page="page8" checked onchange="togglePage('page8', this.checked)"> પેજ ૮: સ્વઘોષણા (વિધવા/વિધૂર)</label>
+            <label><input type="checkbox" class="page-chk" data-page="page9" checked onchange="togglePage('page9', this.checked)"> પેજ ૯: સ્વઘોષણા (સિનીયોરીટી)</label>
+            <label><input type="checkbox" class="page-chk" data-page="page10" checked onchange="togglePage('page10', this.checked)"> પેજ ૧૦: સેવા વૃતાંત</label>
+            <label><input type="checkbox" class="page-chk" data-page="page11" checked onchange="togglePage('page11', this.checked)"> પેજ ૧૧: બિનપગારી રજા વિગત</label>
+            <label><input type="checkbox" class="page-chk" data-page="page12" checked onchange="togglePage('page12', this.checked)"> પેજ ૧૨: મુ.શિ.શ્રીનો દાખલો</label>
+        </div>
+
+        <div class="section-title">૨. શિક્ષક અને શાળાની મૂળભૂત માહિતી (ઓટોમેટિક તમામ પેજમાં લખાશે)</div>
+        <div class="form-grid">
+            <div class="form-group"><label>શિક્ષકનું પૂરું નામ (સેવાપોથી મુજબ):</label><input type="text" data-bind="tName" value="પરબતભાઈ કરમુર"></div>
+            <div class="form-group"><label>હોદ્દો:</label><input type="text" data-bind="desig" value="ઉ.પ્રા. શિક્ષક"></div>
+            <div class="form-group"><label>વિભાગ / વિષય:</label><input type="text" data-bind="dept" value="ભાષા (૬ થી ૮)"></div>
+            <div class="form-group"><label>મોબાઈલ નંબર:</label><input type="text" data-bind="mobile" value="9586311704"></div>
+            <div class="form-group"><label>હાલની શાળાનું પૂરું નામ:</label><input type="text" data-bind="school" value="શ્રી કોરાડા વાડી પ્રાથમિક શાળા"></div>
+            <div class="form-group"><label>શાળાનો ડાયસ કોડ:</label><input type="text" data-bind="dise" value="24100105204"></div>
+            <div class="form-group"><label>પે સેન્ટર શાળાનું નામ:</label><input type="text" data-bind="payCenter" value="શ્રી કોરાડા પે સેન્ટર શાળા"></div>
+            <div class="form-group"><label>તાલુકો (TPEO ઓટોમેટિક લખાશે):</label><input type="text" data-bind="taluka" value="દ્વારકા"></div>
+            <div class="form-group"><label>જિલ્લો:</label><input type="text" data-bind="district" value="દેવભૂમિ દ્વારકા"></div>
+            <div class="form-group"><label>જન્મ તારીખ (ઉંમર ઓટો ગણાશે):</label><input type="date" id="dobInput" data-date="dob" value="1988-06-01" onchange="handleDateAndCalc()"></div>
+            <div class="form-group"><label>હાલની ઉંમર (વર્ષ) [ઓટોમેટિક]:</label><input type="text" id="ageInput" data-bind="age" value="38"></div>
+            <div class="form-group"><label>ઓળખના પુરાવાનો નંબર (પાન/ચૂંટણી):</label><input type="text" data-bind="idProof" value="ABCDE1234F"></div>
+        </div>
+
+        <div class="section-title">૩. તારીખો અને નોકરીના દિવસોની ઓટોમેટિક ગણતરી</div>
+        <div class="form-grid">
+            <div class="form-group"><label>અરજીની તારીખ (ગણતરી આ તારીખે થશે):</label><input type="date" id="appDateInput" data-date="appDate" value="2026-10-19" onchange="handleDateAndCalc()"></div>
+            <div class="form-group"><label>ખાતામાં દાખલ તારીખ:</label><input type="date" id="deptJoinInput" data-date="deptJoinDate" value="2015-06-15" onchange="handleDateAndCalc()"></div>
+            <div class="form-group"><label>હાલની શાળામાં દાખલ તારીખ:</label><input type="date" id="schoolJoinInput" data-date="schoolJoinDate" value="2023-01-01" onchange="handleDateAndCalc()"></div>
+            <div class="form-group"><label>સિનિયોરીટીની ગણતરી તારીખ:</label><input type="date" id="seniorityDateInput" data-date="seniorityDate" value="2023-01-01" onchange="handleDateAndCalc()"></div>
+            <div class="form-group"><label>વધ પહેલાની શાળા દાખલ તારીખ:</label><input type="date" id="surplusDateInput" data-date="surplusDate" onchange="handleDateAndCalc()"></div>
+            <div class="form-group"><label>શાળામાંથી છૂટા થયા તારીખ (પેજ ૧૨):</label><input type="date" id="relieveDateInput" data-date="relieveDate" value="2026-10-19" onchange="handleDateAndCalc()"></div>
+            <div class="form-group"><label>નોકરીની લંબાઈ (વર્ષ-માસ-દિવસ) [ઓટો]:</label>
+                <div style="display:flex; gap:5px;">
+                    <input type="text" id="lenYInput" data-bind="lenY" style="width:33%">
+                    <input type="text" id="lenMInput" data-bind="lenM" style="width:33%">
+                    <input type="text" id="lenDInput" data-bind="lenD" style="width:34%">
+                </div>
+            </div>
+            <div class="form-group"><label>ઓનલાઈન અરજી ફોર્મ નંબર:</label><input type="text" data-bind="appNo" value="TR202600845"></div>
+            <div class="form-group"><label>શાળા જાવક ક્રમાંક:</label><input type="text" data-bind="outwardNo" value="48/2026"></div>
+            <div class="form-group"><label>બદલી પ્રકાર / અગ્રતા:</label><input type="text" data-bind="categoryView" value="સિનીયોરીટી"></div>
+            <div class="form-group"><label>અગાઉ બદલીમાં અગ્રતાનો લાભ લીધેલ છે?:</label><input type="text" data-bind="prevBenefit" value="ના"></div>
+            <div class="form-group"><label>જન્મતારીખનો પુરાવો (ચેકલીસ્ટ માટે):</label><input type="text" data-bind="dobProofType" value="એલ.સી. / પાન કાર્ડ"></div>
+        </div>
+
+        <div class="section-title">૪. પરિશિષ્ટ-૧ (દંપતી કિસ્સા માટે પતિ/પત્નીની વિગતો - પેજ ૪)</div>
+        <div class="form-grid">
+            <div class="form-group"><label>પતિ/પત્નીનું પૂરું નામ:</label><input type="text" data-bind="spName" value="મંજુબેન કરમુર"></div>
+            <div class="form-group"><label>પતિ/પત્નીની જન્મ તારીખ:</label><input type="date" data-date="spDob" value="1990-05-10" onchange="handleDateAndCalc()"></div>
+            <div class="form-group"><label>પતિ/પત્નીનો હોદ્દો:</label><input type="text" data-bind="spDesig" value="પ્રાથમિક શિક્ષક"></div>
+            <div class="form-group"><label>ખાતામાં દાખલ તારીખ:</label><input type="date" data-date="spDeptDate" value="2016-07-01" onchange="handleDateAndCalc()"></div>
+            <div class="form-group"><label>વિભાગ / વિષય:</label><input type="text" data-bind="spSubject" value="ધોરણ ૧ થી ૫"></div>
+            <div class="form-group"><label>હાલની સંસ્થામાં દાખલ તારીખ:</label><input type="date" data-date="spCurrDate" value="2019-06-10" onchange="handleDateAndCalc()"></div>
+            <div class="form-group"><label>કચેરી/સંસ્થાનું સરનામું:</label><input type="text" data-bind="spInstAddr" value="શ્રી દ્વારકા પ્રાથમિક શાળા"></div>
+            <div class="form-group"><label>ટેલીફોન / મોબાઈલ નંબર:</label><input type="text" data-bind="spPhone" value="9586311704"></div>
+            <div class="form-group"><label>પૂરો પગાર / ફિક્સ પગાર:</label><input type="text" data-bind="spPayType" value="પૂરો પગાર"></div>
+            <div class="form-group"><label>પગાર ધોરણ (બેઝિક):</label><input type="text" data-bind="spBasic" value="39,900/-"></div>
+            <div class="form-group"><label>નિયમિત પગારમાં સમાવવાની તારીખ:</label><input type="date" data-date="spRegDate" value="2021-07-01" onchange="handleDateAndCalc()"></div>
+            <div class="form-group"><label>નિવૃત્તિની તારીખ:</label><input type="date" data-date="spRetireDate" value="2048-05-31" onchange="handleDateAndCalc()"></div>
+        </div>
+    </div>
+
+    <!-- ==================== ૧૨ A4 પેજ પ્રિવ્યુ કન્ટેનર ==================== -->
+    <div class="preview-wrapper">
+    <div class="preview-container" id="pagesContainer" contenteditable="true" oninput="triggerAutoSave()">
+
+        <!-- પેજ ૧: અરજી પત્રક -->
+        <div class="a4-page" id="page1">
+            <div class="ornate-border">
+                <span class="page-badge no-print">Page 1 / 12</span>
+                <div>
+                    <div class="top-split">
+                        <div style="width: 45%;">જાવક ક્રમાંક:- <span class="dyn" data-view="outwardNo">48/2026</span><br>તા. <span class="dyn" data-view="appDate">19/10/2026</span></div>
+                        <div style="width: 53%;">
+                            શિક્ષકનું નામ:- <span class="dyn" data-view="tName">પરબતભાઈ કરમુર</span><br>
+                            શાળા:- <span class="dyn" data-view="school">શ્રી કોરાડા વાડી પ્રાથમિક શાળા</span><br>
+                            તાલુકો:- <span class="dyn" data-view="taluka">દ્વારકા</span> | જિ. <span class="dyn" data-view="district">દેવભૂમિ દ્વારકા</span><br>
+                            ડાયસ કોડ:- <span class="dyn" data-view="dise">24100105204</span><br>
+                            મોબાઈલ નં:- <span class="dyn" data-view="mobile">9586311704</span> | તા. <span class="dyn" data-view="appDate">19/10/2026</span>
+                        </div>
+                    </div>
+                    <div class="doc-text" style="margin-top: 12px;">
+                        પ્રતિશ્રી,<br>તાલુકા પ્રાથમિક શિક્ષણાધિકારી સાહેબશ્રી,<br>
+                        તાલુકા પંચાયત શિક્ષણ શાખા, તા. <span class="dyn" data-view="taluka">દ્વારકા</span>, જિ. <span class="dyn" data-view="district">દેવભૂમિ દ્વારકા</span><br>
+                        મારફત મુ.શિ.શ્રી, <span class="dyn" data-view="school">શ્રી કોરાડા વાડી પ્રાથમિક શાળા</span>
+                    </div>
+                    <div class="doc-title" style="margin: 14px 0;">વિષય:- જિલ્લા આંતરીક બદલી કેમ્પમાં કરેલ અરજી મંજુર કરવા બાબત</div>
+                    <div class="doc-text">
+                        મહાશય,<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;સવિનય જયભારત સહ ઉપરોક્ત વિષય અન્વયે આપ સાહેબશ્રીને નમ્ર અરજ સહ વિનંતિ કે આ સાથે મેં ઓનલાઈન આંતરીક બદલીનું ફોર્મ ભરેલ છે, જે અનુસાર મેં આ અરજી સાથે ઓનલાઈન અરજી અને પુરાવા, મુ.શિ.શ્રીનું પ્રમાણપત્ર આ સાથે બિડેલ છે, તો આ બાબતે મારી અરજીને ધ્યાને લઈ મારી જિલ્લા આંતરીક બદલી કેમ્પની મારી અરજી મંજુર કરવા બાબતે આપની કક્ષાએથી ઘટતી કાર્યવાહી અર્થે વિદીત થવા વિનંતિ.
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-top: 18px;" class="doc-text">
+                        <div><b>બિડાણ:-</b><br>1. ઓનલાઈન અરજી ફોર્મ<br>2. મુ.શિ.શ્રીનું પ્રમાણપત્ર<br>3. પુરાવા</div>
+                        <div style="text-align: center; min-width: 180px;"><div class="sign-line"><b>શિક્ષકની સહી</b></div></div>
+                    </div>
+                    <hr style="border: 1.5px dashed #000; margin: 20px 0 14px 0;">
+                    <div class="top-split">
+                        <div>જાવક નં.:- <span class="dyn" data-view="outwardNo">48/2026</span></div>
+                        <div>તા. <span class="dyn" data-view="appDate">19/10/2026</span></div>
+                    </div>
+                    <div class="doc-text">
+                        પ્રતિશ્રી,<br>તાલુકા પ્રાથમિક શિક્ષણાધિકારી સાહેબશ્રી,<br>
+                        તાલુકા પંચાયત શિક્ષણ શાખા, તા. <span class="dyn" data-view="taluka">દ્વારકા</span>, જિ. <span class="dyn" data-view="district">દેવભૂમિ દ્વારકા</span>
+                    </div>
+                    <div class="doc-text" style="margin-top: 10px;">
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ઉપરોક્ત અરજી અને પુરાવાને ધ્યાને લઈ આપ સાહેબશ્રીની કક્ષાએથી ઘટતી કાર્યવાહી કરવા બાબતે અત્રેથી ભલામણ કરવામાં આવે છે.
+                    </div>
+                </div>
+                <div class="sign-grid" style="justify-content: flex-end; margin-bottom: 5px;">
+                    <div style="min-width: 240px;"><div class="sign-line">મુખ્ય શિક્ષકશ્રીના સહી સિક્કા<br><span class="dyn" data-view="school">શ્રી કોરાડા વાડી પ્રાથમિક શાળા</span></div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- પેજ ૨: ચેકલીસ્ટ -->
+        <div class="a4-page" id="page2">
+            <div class="ornate-border" style="justify-content: flex-start;">
+                <span class="page-badge no-print">Page 2 / 12</span>
+                <div class="doc-title">જિલ્લા આંતરીક બદલી કેમ્પમાં અરજી સાથે જોડવાના પુરાવા અંગેનું ચેકલીસ્ટ</div>
+                <div class="doc-text" style="line-height: 1.55; text-align: left;">
+                    અરજદારનું નામ:- <span class="dyn" data-view="tName">પરબતભાઈ કરમુર</span> &nbsp;|&nbsp; મો. <span class="dyn" data-view="mobile">9586311704</span><br>
+                    શાળા:- <span class="dyn" data-view="school">શ્રી કોરાડા વાડી પ્રાથમિક શાળા</span> &nbsp;|&nbsp; ડાયસકોડ:- <span class="dyn" data-view="dise">24100105204</span> &nbsp;|&nbsp; તાલુકો:- <span class="dyn" data-view="taluka">દ્વારકા</span><br>
+                    ઓનલાઈન અરજી ફોર્મ નંબર:- <span class="dyn" data-view="appNo">TR202600845</span> &nbsp;|&nbsp; બદલી પ્રકાર :- સિનીયોરીટી/અગ્રતા પ્રકાર સાથે:- <span class="dyn" data-view="categoryView">સિનીયોરીટી</span>
+                </div>
+                <div class="inline-table-bar no-print" contenteditable="false">
+                    <span style="font-size: 14.5px; font-weight: 700; color: #1e3a8a;">નીચેના ક્રમ મુજબ સેટ બનાવવો, ક્રમ આપવો:</span>
+                    <button type="button" class="btn btn-primary" style="padding: 3px 10px; font-size: 14px;" onclick="addChecklistRow()">+ ચેકલીસ્ટમાં રો ઉમેરો</button>
+                </div>
+                <table class="doc-table" id="checklistTable">
+                    <thead>
+                        <tr>
+                            <th style="width: 8%;">અ.નં.</th>
+                            <th style="width: 52%;">વિગત</th>
+                            <th style="width: 22%;">પુરાવો છે? હા/ના/લાગુ પડતું નથી</th>
+                            <th style="width: 18%;">રીમાર્ક્સ</th>
+                            <th class="no-print" style="width: 40px;">X</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td style="text-align:center;">1</td><td>ઓનલાઈન અરજી ફોર્મ</td><td style="text-align:center;">હા</td><td></td><td class="no-print" contenteditable="false"><button type="button" class="btn btn-danger" onclick="deleteRow(this)">X</button></td></tr>
+                        <tr><td style="text-align:center;">2</td><td>નોકરી લંબાઈ બાબતનું મુ.શિ.નું પ્રમાણપત્ર</td><td style="text-align:center;">હા</td><td></td><td class="no-print" contenteditable="false"><button type="button" class="btn btn-danger" onclick="deleteRow(this)">X</button></td></tr>
+                        <tr><td style="text-align:center;">3</td><td>સેવા વૃતાંત</td><td style="text-align:center;">હા</td><td></td><td class="no-print" contenteditable="false"><button type="button" class="btn btn-danger" onclick="deleteRow(this)">X</button></td></tr>
+                        <tr><td style="text-align:center;">4</td><td>પ્રથમ નિમણૂંક હુકમ</td><td style="text-align:center;">હા</td><td></td><td class="no-print" contenteditable="false"><button type="button" class="btn btn-danger" onclick="deleteRow(this)">X</button></td></tr>
+                        <tr><td style="text-align:center;">5</td><td>ઉત્તરોત્તર બદલીના તમામ હુકમો</td><td style="text-align:center;">હા</td><td></td><td class="no-print" contenteditable="false"><button type="button" class="btn btn-danger" onclick="deleteRow(this)">X</button></td></tr>
+                        <tr><td style="text-align:center;">6</td><td>કપાત પગારી/ બિનપગારી રજા અંગેનું પ્રમાણપત્ર</td><td style="text-align:center;">હા</td><td></td><td class="no-print" contenteditable="false"><button type="button" class="btn btn-danger" onclick="deleteRow(this)">X</button></td></tr>
+                        <tr><td style="text-align:center;">7</td><td>સ્વઘોષણા અને પુરાવા(સિનીયોરીટી/દિવ્યાંગ/વાલ્મીકી/દંપતી/વિધવા-વિધુર)</td><td style="text-align:center;">હા</td><td></td><td class="no-print" contenteditable="false"><button type="button" class="btn btn-danger" onclick="deleteRow(this)">X</button></td></tr>
+                        <tr><td style="text-align:center;">8</td><td>પરિશિષ્ટ-૧ દંપતી કિસ્સા માટે</td><td style="text-align:center;">લાગુ પડતું નથી</td><td></td><td class="no-print" contenteditable="false"><button type="button" class="btn btn-danger" onclick="deleteRow(this)">X</button></td></tr>
+                        <tr><td style="text-align:center;">9</td><td>સેવાપોથી પ્રથમ પાનની નકલ</td><td style="text-align:center;">હા</td><td></td><td class="no-print" contenteditable="false"><button type="button" class="btn btn-danger" onclick="deleteRow(this)">X</button></td></tr>
+                        <tr><td style="text-align:center;">10</td><td>જન્મ તારીખનો પૂરાવો (<span class="dyn" data-view="dobProofType">એલ.સી. / પાન કાર્ડ</span>)</td><td style="text-align:center;">હા</td><td></td><td class="no-print" contenteditable="false"><button type="button" class="btn btn-danger" onclick="deleteRow(this)">X</button></td></tr>
+                        <tr><td style="text-align:center;">11</td><td>પાનકાર્ડની નકલ</td><td style="text-align:center;">હા</td><td></td><td class="no-print" contenteditable="false"><button type="button" class="btn btn-danger" onclick="deleteRow(this)">X</button></td></tr>
+                        <tr><td style="text-align:center;">12</td><td>સુધારા અરજી</td><td style="text-align:center;">ના</td><td></td><td class="no-print" contenteditable="false"><button type="button" class="btn btn-danger" onclick="deleteRow(this)">X</button></td></tr>
+                        <tr><td style="text-align:center;">13</td><td>અન્ય:</td><td style="text-align:center;">-</td><td></td><td class="no-print" contenteditable="false"><button type="button" class="btn btn-danger" onclick="deleteRow(this)">X</button></td></tr>
+                    </tbody>
+                </table>
+                <div class="doc-text" style="margin-top: 6px; text-align: left;">ઉપરોક્ત વિગતો અને પૂરાવા મેં જાતે ચકાસ્યા છે, જે બરાબર છે, જેની ખાતરી કરી સહી કરેલ છે.</div>
+                <div style="margin-top: auto; padding-top: 20px; width: 100%;">
+                    <div class="sign-grid" style="margin-bottom: 16px;">
+                        <div style="width: 30%;"><div class="sign-line">અરજદારશ્રીની સહી</div></div>
+                        <div style="width: 32%;"><div class="sign-line">મુ.શિ.શ્રીના સહી સિક્કા</div></div>
+                        <div style="width: 34%;"><div class="sign-line">પે સેન્ટર આચાર્યશ્રીના સહી સિક્કા</div></div>
+                    </div>
+                    <div style="border-top: 1.5px solid #000; padding-top: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 16px; font-weight: 700; text-align: left;">
+                        <div>તાલુકા કક્ષાએ ચકાસણી કરી અરજી સ્વિકારનારની સહી:- ______________________</div>
+                        <div>અરજી સ્વિકાર્યાની તારીખ:- <span class="dyn" data-view="appDate">19/10/2026</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- પેજ ૩: ઓનલાઈન પ્રમાણપત્ર -->
+        <div class="a4-page" id="page3">
+            <div class="ornate-border">
+                <span class="page-badge no-print">Page 3 / 12</span>
+                <div>
+                    <div class="doc-title" style="margin-bottom: 2px;">જિલ્લા શિક્ષણ સમિતિ/નગર શિક્ષણ સમિતિ, <span class="dyn" data-view="district">દેવભૂમિ દ્વારકા</span></div>
+                    <div class="doc-subtitle" style="text-decoration: underline;">ઓનલાઈન જિલ્લા આંતરીક બદલી કેમ્પ અન્વયે રજૂ કરવાનું પ્રમાણપત્ર</div>
+                    <table class="doc-table">
+                        <tbody>
+                            <tr><td style="width: 56%;">૧. શિક્ષકનું સેવાપોથી મુજબનું પૂરું નામ</td><td>:- <span class="dyn" data-view="tName">પરબતભાઈ કરમુર</span></td></tr>
+                            <tr><td>૨. હોદ્દો</td><td>:- <span class="dyn" data-view="desig">ઉ.પ્રા. શિક્ષક</span></td></tr>
+                            <tr><td>૩. વિભાગ</td><td>:- <span class="dyn" data-view="dept">ભાષા (૬ થી ૮)</span></td></tr>
+                            <tr><td>૪. હાલની શાળાનું નામ</td><td>:- <span class="dyn" data-view="school">શ્રી કોરાડા વાડી પ્રાથમિક શાળા</span></td></tr>
+                            <tr><td>૫. પે સેન્ટરનું નામ</td><td>:- <span class="dyn" data-view="payCenter">શ્રી કોરાડા પે સેન્ટર શાળા</span></td></tr>
+                            <tr><td>૬. તાલુકો</td><td>:- <span class="dyn" data-view="taluka">દ્વારકા</span></td></tr>
+                            <tr><td>૭. હાલની શાળામાં દાખલ તારીખ</td><td>:- <span class="dyn" data-view="schoolJoinDate">01/01/2023</span></td></tr>
+                            <tr><td>૮. જન્મતારીખ</td><td>:- <span class="dyn" data-view="dob">01/06/1988</span></td></tr>
+                            <tr><td>૯. ખાતામાં દાખલ તારીખ</td><td>:- <span class="dyn" data-view="deptJoinDate">15/06/2015</span></td></tr>
+                            <tr><td>૧૦. જો વધથી આ શાળામાં આવેલ હોય તો વખતો વખત વધ પહેલાની શાળાની દાખલ તારીખ</td><td>:- <span class="dyn" data-view="surplusDate">લાગુ પડતું નથી</span></td></tr>
+                            <tr>
+                                <td>૧૧. હાલની શાળામાં નોકરીની લંબાઈ અરજી કર્યા તારીખે (કપાત પગારી રજા બાદ કરતાં) આંતરીક બદલીની અરજીના દિવસે</td>
+                                <td>વર્ષ: <span class="dyn" data-view="lenY">3</span> | માસ: <span class="dyn" data-view="lenM">9</span> | દિવસ: <span class="dyn" data-view="lenD">18</span></td>
+                            </tr>
+                            <tr><td>૧૨. માંગણી મુજબ બદલી માટે સિનિયોરીટીની તારીખ</td><td>:- <span class="dyn" data-view="seniorityDate">01/01/2023</span></td></tr>
+                            <tr><td>૧૩. અન્ય</td><td>:- -</td></tr>
+                            <tr><td>૧૪. અરજીનો પ્રકાર (સિનિયોરીટી/અગ્રતા) જો અગ્રતા હોય તો કઈ?</td><td>:- <span class="dyn" data-view="categoryView">સિનીયોરીટી</span></td></tr>
+                        </tbody>
+                    </table>
+                    <div style="font-size: 15.5px; font-weight: 700; margin: 5px 0 2px 0;">મજકૂર શિક્ષકની અન્ય હકીકત નીચે મુજબ છે.</div>
+                    <div class="doc-text" style="font-size: 15px; line-height: 1.45; text-align: left;">
+                        ૧. વિધવા/વિધૂર અંગેનો લાભ અગાઉ બદલીમાં લીધેલ છે કે કેમ? :- <span class="dyn" data-view="prevBenefit">ના</span><br>
+                        ૨. વાલ્મીકી અંગેનો લાભ અગાઉ બદલીમાં લીધેલ છે કે કેમ? :- <span class="dyn" data-view="prevBenefit">ના</span><br>
+                        ૩. અપંગતા અંગેનો કે વાલ્મીકી અંગેનો લાભ વિદ્યાસહાયક ભરતીની સ્થળ પસંદગી વખતે કે અગાઉ બદલીમાં લીધેલ છે કે કેમ? :- <span class="dyn" data-view="prevBenefit">ના</span><br>
+                        ૪. પતિ/પત્નિ કિસ્સામાં અગ્રતાનો લાભ અગાઉ બદલીમાં લીધેલ છે કે કેમ? :- <span class="dyn" data-view="prevBenefit">ના</span>
+                    </div>
+                    <div class="doc-title" style="margin: 6px 0 4px 0; font-size: 18px;">પ્રમાણપત્ર</div>
+                    <div class="doc-text" style="font-size: 15.5px;">
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;આથી આ પ્રમાણપત્ર આપવામાં આવે છે કે <span class="dyn" data-view="tName">પરબતભાઈ કરમુર</span> (<span class="dyn" data-view="desig">ઉ.પ્રા. શિક્ષક</span>), <span class="dyn" data-view="school">શ્રી કોરાડા વાડી પ્રાથમિક શાળા</span>, તાલુકો <span class="dyn" data-view="taluka">દ્વારકા</span> ની ઉપર મુજબની તમામ વિગત શાળા/કચેરીના રેકર્ડ તથા સેવાપોથી આધારે ખરાઈ કરી ભરવામાં આવેલ છે. જેની અમોએ જાત ચકાસણી કરેલ છે. જે બરાબર છે. જેની ખાતરી બદલ આ પ્રમાણપત્ર આપવામાં આવે છે.
+                    </div>
+                </div>
+                <div class="sign-grid-4">
+                    <div class="sign-line">શિક્ષકની સહી</div>
+                    <div class="sign-line">મુ.શિ.શ્રીની સહી/સિક્કો</div>
+                    <div class="sign-line">પે સેન્ટર મુ.શિ.શ્રીની સહી/સિક્કો</div>
+                    <div class="sign-line">તાલુકા પ્રાથમિક શિક્ષણાધિકારીશ્રીની સહી/સિક્કો (તા. <span class="dyn" data-view="taluka">દ્વારકા</span>)</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- પેજ ૪: પરિશિષ્ટ-૧ (દંપતી કિસ્સા) -->
+        <div class="a4-page" id="page4">
+            <div class="ornate-border">
+                <span class="page-badge no-print">Page 4 / 12</span>
+                <div>
+                    <div class="doc-title" style="margin-bottom: 2px;">પરિશિષ્ટ-૧</div>
+                    <div class="doc-subtitle">
+                        દંપતિ કિસ્સામાં ફેરબદલી માટે આપવાનું પ્રમાણપત્ર<br>
+                        <span style="font-size: 14px;">(શિક્ષણ વિભાગના ઠરાવ ક્રમાંક:પીઆરઇ/૧૧૨૦૧૨/૬૨૧૦૬૫/ક (પાર્ટ-૧) તા. ૧૧/૦૫/૨૦૨૩ મુજબ)</span>
+                    </div>
+                    <div class="top-split">
+                        <div>જ.નં. <span class="dyn" data-view="outwardNo">48/2026</span></div>
+                        <div>તારીખ:- <span class="dyn" data-view="appDate">19/10/2026</span></div>
+                    </div>
+                    <table class="doc-table">
+                        <tbody>
+                            <tr><td style="width: 48%;">(૧) કર્મચારીનું પુરૂ નામ</td><td>:- <span class="dyn" data-view="spName">મંજુબેન કરમુર</span></td></tr>
+                            <tr><td>(૨) જન્મ તારીખ</td><td>:- <span class="dyn" data-view="spDob">10/05/1990</span></td></tr>
+                            <tr><td>(૩) હોદ્દો</td><td>:- <span class="dyn" data-view="spDesig">પ્રાથમિક શિક્ષક</span></td></tr>
+                            <tr><td>(૪) ખાતામાં દાખલ તારીખ</td><td>:- <span class="dyn" data-view="spDeptDate">01/07/2016</span></td></tr>
+                            <tr><td>(૫) પ્રાથમિક શિક્ષકના કિસ્સામાં વિભાગ/ વિષય</td><td>:- <span class="dyn" data-view="spSubject">ધોરણ ૧ થી ૫</span></td></tr>
+                            <tr><td>(૬) હાલની કચેરી/સંસ્થામાં દાખલ તારીખ</td><td>:- <span class="dyn" data-view="spCurrDate">10/06/2019</span></td></tr>
+                            <tr>
+                                <td>(૭) કચેરીનું / સંસ્થાનું સરનામું</td>
+                                <td>સરનામું:- <span class="dyn" data-view="spInstAddr">શ્રી દ્વારકા પ્રાથમિક શાળા</span><br>તાલુકો:- <span class="dyn" data-view="taluka">દ્વારકા</span> | જિલ્લો:- <span class="dyn" data-view="district">દેવભૂમિ દ્વારકા</span> | ફોન:- <span class="dyn" data-view="spPhone">9586311704</span></td>
+                            </tr>
+                            <tr>
+                                <td>(૮) પગારની વિગત</td>
+                                <td>
+                                    (૧) પૂરો પગાર/ ફિક્સ પગાર :- <span class="dyn" data-view="spPayType">પૂરો પગાર</span><br>
+                                    (૨) પગાર ધોરણ (બેઝિક) :- <span class="dyn" data-view="spBasic">39,900/-</span><br>
+                                    (૩) ફિક્સ પગારમાં હોય તો નિયમિત પગાર ધોરણમાં સમાવવાની તારીખ :- <span class="dyn" data-view="spRegDate">01/07/2021</span><br>
+                                    (૪) નિયત સમય (પાંચ વર્ષ) બાદ નિયત પગારમાં સમાવવાપાત્ર છે કે કેમ? હા કે ના :- હા
+                                </td>
+                            </tr>
+                            <tr><td>(૯) નિવૃત્તિની તારીખ</td><td>:- <span class="dyn" data-view="spRetireDate">31/05/2048</span></td></tr>
+                        </tbody>
+                    </table>
+                    <div class="doc-text" style="margin-top: 10px;">
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ઉપરોક્ત પ્રમાણપત્ર શ્રી/શ્રીમતિ : <span class="dyn" data-view="spName">મંજુબેન કરમુર</span> ની અસલ સેવાપોથીની ખરાઈ કરીને તેમના પતિ/પત્નિ શ્રી/શ્રીમતિ: <span class="dyn" data-view="tName">પરબતભાઈ કરમુર</span> હોદ્દો: <span class="dyn" data-view="desig">ઉ.પ્રા. શિક્ષક</span> શાળા: <span class="dyn" data-view="school">શ્રી કોરાડા વાડી પ્રાથમિક શાળા</span> તાલુકો: <span class="dyn" data-view="taluka">દ્વારકા</span> જિલ્લો: <span class="dyn" data-view="district">દેવભૂમિ દ્વારકા</span> ની જિલ્લા આંતરીક બદલી/ જિલ્લાફેર બદલીના હેતુસર આપવામાં આવે છે.
+                    </div>
+                </div>
+                <div>
+                    <div class="doc-text" style="margin-bottom: 14px;">સ્થળ: <span class="dyn" data-view="taluka">દ્વારકા</span><br>તારીખ: <span class="dyn" data-view="appDate">19/10/2026</span></div>
+                    <div class="sign-grid">
+                        <div>કચેરીનું સીલ<br>(શાળાનો સિક્કો)</div>
+                        <div style="text-align: right;">કચેરી/સંસ્થાના વડાની સહી: ___________________<br><br>સહી કરનારનું નામ: ________________________<br><br>કચેરી/સંસ્થાનો સિક્કો</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- પેજ ૫ થી ૯ (સ્વઘોષણાના ૫ પેજ અહીં ઓટોમેટિક મૂકાશે) -->
+        <div id="declarationsHolder" style="display: contents;"></div>
+
+        <!-- પેજ ૧૦: સેવા વૃતાંત -->
+        <div class="a4-page" id="page10">
+            <div class="ornate-border">
+                <span class="page-badge no-print">Page 10 / 12</span>
+                <div>
+                    <div class="doc-title">નિમણૂંકથી શરૂ કરીને હાલની શાળાની ફરજ સુધીનો વૃતાંત</div>
+                    <div class="doc-text" style="margin-bottom: 8px; text-align: left;">
+                        શિક્ષકનું નામ:- <span class="dyn" data-view="tName">પરબતભાઈ કરમુર</span> &nbsp;|&nbsp; હાલની શાળા:- <span class="dyn" data-view="school">શ્રી કોરાડા વાડી પ્રાથમિક શાળા</span>, તા. <span class="dyn" data-view="taluka">દ્વારકા</span>
+                    </div>
+                    <div class="inline-table-bar no-print" contenteditable="false">
+                        <span style="font-size: 14.5px; font-weight: 700; color: #1e3a8a;">સેવા વૃતાંતમાં નવી શાળા/હુકમ ઉમેરવા અહીં ક્લિક કરો:</span>
+                        <button type="button" class="btn btn-primary" style="padding: 3px 10px; font-size: 14px;" onclick="addServiceRow()">+ સેવા વૃતાંતમાં રો ઉમેરો</button>
+                    </div>
+                    <table class="doc-table" id="serviceTable">
+                        <thead>
+                            <tr>
+                                <th style="width: 7%;">અ.નં.</th>
+                                <th style="width: 21%;">કઈ તારીખથી કઈ તારીખ</th>
+                                <th style="width: 30%;">શાળાનું નામ, તાલુકો, જિલ્લો</th>
+                                <th style="width: 15%;">બદલી/નિમણૂંકના હુકમ નંબર</th>
+                                <th style="width: 13%;">બદલી/નિમણૂંક હુકમની તારીખ</th>
+                                <th style="width: 14%;">બદલીનો પ્રકાર/ અગ્રીમતા</th>
+                                <th class="no-print" style="width: 38px;">X</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="text-align:center;">1</td>
+                                <td><span class="dyn" data-view="deptJoinDate">15/06/2015</span> થી હાલ ચાલુ</td>
+                                <td><span class="dyn" data-view="school">શ્રી કોરાડા વાડી પ્રાથમિક શાળા</span>, તા. <span class="dyn" data-view="taluka">દ્વારકા</span>, જિ. <span class="dyn" data-view="district">દેવભૂમિ દ્વારકા</span></td>
+                                <td>જિ.શિ.સ./2015</td>
+                                <td><span class="dyn" data-view="deptJoinDate">15/06/2015</span></td>
+                                <td style="text-align:center;">નિમણૂંક</td>
+                                <td class="no-print" contenteditable="false"><button type="button" class="btn btn-danger" onclick="deleteRow(this)">X</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="doc-text" style="margin-top: 12px; font-weight: 700;">
+                        નિમણૂંકથી હાલ કાર્યરત શાળાના તમામ હુકમો, હાજર છુટા રીપોર્ટ જોડવા, રીપોર્ટ પ્રાપ્ત ન હોય તો જેતે શાળાના મુશિનો દાખલો જોડવો.
+                    </div>
+                </div>
+                <div class="sign-grid">
+                    <div style="width: 30%;"><div class="sign-line">શિક્ષકની સહી</div></div>
+                    <div style="width: 32%;"><div class="sign-line">મુ.શિ.શ્રીના સહી સિક્કા</div></div>
+                    <div style="width: 34%;"><div class="sign-line">પે સેન્ટર આચાર્યશ્રીના સહી સિક્કા</div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- પેજ ૧૧: બિનપગારી / કપાત પગારી રજાની વિગત -->
+        <div class="a4-page" id="page11">
+            <div class="ornate-border">
+                <span class="page-badge no-print">Page 11 / 12</span>
+                <div>
+                    <div class="doc-title">બિનપગારી / કપાત પગારી રજાની વિગત</div>
+                    <div class="doc-text" style="margin-bottom: 8px; text-align: left;">
+                        શિક્ષકશ્રીનું નામ:- <span class="dyn" data-view="tName">પરબતભાઈ કરમુર</span><br>
+                        હાલની શાળાનું નામ:- <span class="dyn" data-view="school">શ્રી કોરાડા વાડી પ્રાથમિક શાળા</span>, તા. <span class="dyn" data-view="taluka">દ્વારકા</span>
+                    </div>
+                    <div class="inline-table-bar no-print" contenteditable="false">
+                        <span style="font-size: 14.5px; font-weight: 700; color: #1e3a8a;">કપાત પગારી રજા ઉમેરવા અહીં ક્લિક કરો (દિવસો ઓટો ગણાશે):</span>
+                        <button type="button" class="btn btn-primary" style="padding: 3px 10px; font-size: 14px;" onclick="addLeaveRow()">+ કપાત પગારી રજા ઉમેરો</button>
+                    </div>
+                    <table class="doc-table" id="leaveTable">
+                        <thead>
+                            <tr>
+                                <th style="width: 48%;">કઈ તારીખથી કઈ તારીખ સુધી</th>
+                                <th style="width: 18%;">દિવસ (ઓટો)</th>
+                                <th style="width: 34%;">રિમાર્ક્સ</th>
+                                <th class="no-print" style="width: 40px;">X</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leaveTbody">
+                            <tr class="nil-row">
+                                <td style="text-align:center;">નથી (NIL)</td>
+                                <td style="text-align:center;" class="leave-days">0</td>
+                                <td style="text-align:center;">કોઈ કપાત પગારી રજા લીધેલ નથી</td>
+                                <td class="no-print" contenteditable="false"><button type="button" class="btn btn-danger" onclick="deleteRow(this)">X</button></td>
+                            </tr>
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <th style="text-align:right; font-size: 16px;">કુલ કપાત રજાઓની સંખ્યા :-</th>
+                                <th style="text-align:center; font-size: 17px;" id="totalLeaveDaysCell">0</th>
+                                <th></th>
+                                <th class="no-print"></th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                <div class="sign-grid" style="margin-bottom: 15px;">
+                    <div style="width: 30%;"><div class="sign-line">શિક્ષકની સહી</div></div>
+                    <div style="width: 32%;"><div class="sign-line">મુ.શિ.શ્રીની સહી/સિક્કો</div></div>
+                    <div style="width: 34%;"><div class="sign-line">પે સેન્ટર મુ.શિ.શ્રીની સહી/સિક્કો</div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- પેજ ૧૨: મુ.શિ.શ્રીનો દાખલો -->
+        <div class="a4-page" id="page12">
+            <div class="ornate-border">
+                <span class="page-badge no-print">Page 12 / 12</span>
+                <div>
+                    <div class="doc-title" style="font-size: 21px; margin-bottom: 18px;">
+                        છુટા હાજર થયા અંગેનો રીપોર્ટ પ્રાપ્ય ન હોય તેવા કિસ્સામાં મુ.શિ.શ્રીનો દાખલો
+                    </div>
+                    <div class="doc-text" style="line-height: 2.25; font-size: 17px; text-align: left;">
+                        શિક્ષકનું નામ :- <span class="dyn" data-view="tName">પરબતભાઈ કરમુર</span><br>
+                        શાળાનું નામ :- <span class="dyn" data-view="school">શ્રી કોરાડા વાડી પ્રાથમિક શાળા</span> &nbsp;|&nbsp; તાલુકો :- <span class="dyn" data-view="taluka">દ્વારકા</span><br>
+                        અત્રેની શાળામાં હાજર થયા તારીખ :- <span class="dyn" data-view="schoolJoinDate">01/01/2023</span><br>
+                        પ્રકાર :- નિમણૂંક / બદલી / અન્ય<br>
+                        અત્રેની શાળામાંથી છુટા થયા તારીખ :- <span class="dyn" data-view="relieveDate">19/10/2026</span><br>
+                        પ્રકાર :- વધ / માંગણી બદલી / જિલ્લાફેર બદલી / અન્ય<br>
+                        અત્રેની શાળામાં ફરજનો સમયગાળો :- તા. <span class="dyn" data-view="schoolJoinDate">01/01/2023</span> થી તા. <span class="dyn" data-view="relieveDate">19/10/2026</span><br>
+                        (કુલ ફરજ ગાળો: <span class="dyn" id="certPeriodSpan">3 વર્ષ, 9 માસ, 18 દિવસ</span>)
+                    </div>
+                    <div class="doc-text" style="margin-top: 22px; font-size: 17px; line-height: 1.85;">
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;આથી આ પ્રમાણપત્ર લખી આપવામાં આવે છે કે અરજદારશ્રીની હાજર અને છુટા અંગેની વિગતો ઉપર મુજબ છે, જે શાળાના રેકર્ડ પરથી ખરાઈ કરીને લખી આપેલ છે.
+                    </div>
+                </div>
+                <div class="sign-grid" style="margin-bottom: 15px; font-size: 17px;">
+                    <div>તારીખ :- <span class="dyn" data-view="appDate">19/10/2026</span></div>
+                    <div style="min-width: 220px;"><div class="sign-line">મુ.શિ.શ્રીની સહી/સિક્કો</div></div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+    </div>
+
+</div>
+</body>
+</html>
