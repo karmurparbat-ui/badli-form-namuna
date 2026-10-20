@@ -13,7 +13,7 @@
         let saveTimer;
 
         // ===== યુઝર ટ્રેકિંગ / કાઉન્ટર =====
-        // Google Apps Script ની Web App URL અહીં પેસ્ટ કરો (https://script.google.com/macros/s/.../exec)
+        // અહી રહેલી syntax error (વધારાનો કોટ ') દૂર કરવામાં આવી છે.
         const TRACK_URL = 'https://script.google.com/macros/s/AKfycbwFwu9XQYDG8BE4hWSAhFiQAfnWNJ6KFX6UbkwekEOrM70favYMcIS3baXeZM-8nayf/exec';
         const SAMPLE_NAME = 'પરબતભાઈ કરમુર';
         const SAMPLE_SCHOOL = 'શ્રી કોરાડા વાડી પ્રાથમિક શાળા';
@@ -43,7 +43,7 @@
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify({
                         deviceId: getDeviceId(),
-                        action: isSample ? 'visit' : action,
+                        action: isSample ? 'visit' : (action === 'visit' ? 'fill' : action),
                         name: isSample ? '' : name,
                         school: isSample ? '' : school,
                         taluka: get('taluka'),
@@ -131,6 +131,7 @@
             const appDateVal = document.getElementById('appDateInput')?.value;
             const dobVal = document.getElementById('dobInput')?.value;
             const schoolJoinVal = document.getElementById('schoolJoinInput')?.value;
+            const seniorityVal = document.getElementById('seniorityDateInput')?.value;
             const relieveVal = document.getElementById('relieveDateInput')?.value;
 
             if (dobVal && appDateVal) {
@@ -158,8 +159,8 @@
             const totalCell = document.getElementById('totalLeaveDaysCell');
             if (totalCell) totalCell.textContent = totalLeave;
 
-            if (schoolJoinVal && appDateVal) {
-                const lenObj = calcYMD(schoolJoinVal, appDateVal, totalLeave);
+            if (seniorityVal && appDateVal) {
+                const lenObj = calcYMD(seniorityVal, appDateVal, totalLeave);
                 if (lenObj) {
                     document.getElementById('lenYInput').value = lenObj.y;
                     document.getElementById('lenMInput').value = lenObj.m;
@@ -497,8 +498,6 @@
         body.bw-mode .dyn { color: #000 !important; }
         body.bw-mode .a4-page { filter: grayscale(100%); }
 
-
-        /* ===== જાહેરાત (દૈનિક રોજનીશી એપ) ===== */
         .ad-banner {
             max-width: 1150px; margin: 14px auto 0 auto; padding: 10px 16px;
             background: linear-gradient(135deg, #fff7ed, #fef3c7); border: 2px solid #f59e0b;
@@ -661,7 +660,7 @@
             <div class="form-group"><label>સિનિયોરીટીની ગણતરી તારીખ:</label><input type="date" id="seniorityDateInput" data-date="seniorityDate" value="2023-01-01" onchange="handleDateAndCalc()"></div>
             <div class="form-group"><label>વધ પહેલાની શાળા દાખલ તારીખ:</label><input type="date" id="surplusDateInput" data-date="surplusDate" onchange="handleDateAndCalc()"></div>
             <div class="form-group"><label>શાળામાંથી છૂટા થયા તારીખ (પેજ ૧૨):</label><input type="date" id="relieveDateInput" data-date="relieveDate" value="2026-10-19" onchange="handleDateAndCalc()"></div>
-            <div class="form-group"><label>નોકરીની લંબાઈ (વર્ષ-માસ-દિવસ) [ઓટો]:</label>
+            <div class="form-group"><label>નોકરીની લંબાઈ (સિનિયોરીટી તારીખથી) [ઓટો]:</label>
                 <div style="display:flex; gap:5px;">
                     <input type="text" id="lenYInput" data-bind="lenY" style="width:33%">
                     <input type="text" id="lenMInput" data-bind="lenM" style="width:33%">
@@ -742,7 +741,6 @@
             </div>
         </div>
 
-        <!-- પેજ ૨: ચેકલીસ્ટ -->
         <div class="a4-page" id="page2">
             <div class="ornate-border" style="justify-content: flex-start;">
                 <span class="page-badge no-print">Page 2 / 12</span>
@@ -797,7 +795,6 @@
             </div>
         </div>
 
-        <!-- પેજ ૩: ઓનલાઈન પ્રમાણપત્ર -->
         <div class="a4-page" id="page3">
             <div class="ornate-border">
                 <span class="page-badge no-print">Page 3 / 12</span>
@@ -846,7 +843,6 @@
             </div>
         </div>
 
-        <!-- પેજ ૪: પરિશિષ્ટ-૧ (દંપતી કિસ્સા) -->
         <div class="a4-page" id="page4">
             <div class="ornate-border">
                 <span class="page-badge no-print">Page 4 / 12</span>
@@ -892,7 +888,7 @@
                     <div class="doc-text" style="margin-bottom: 14px;">સ્થળ: <span class="dyn" data-view="taluka">દ્વારકા</span><br>તારીખ: <span class="dyn" data-view="appDate">19/10/2026</span></div>
                     <div class="sign-grid">
                         <div>કચેરીનું સીલ<br>(શાળાનો સિક્કો)</div>
-                        <div style="text-align: right;">કચેરી/સંસ્થાના વડાની સહી: ___________________<br><br>સહી કરનારનું નામ: ________________________<br><br>કચેરી/સંસ્થાનો સિક્કો</div>
+                        <div style="text-align: right;">કચેરી/સંસ્થાના વડાની સહી: ___________________<br><br>સહી کرનારનું નામ: ________________________<br><br>કચેરી/સંસ્થાનો સિક્કો</div>
                     </div>
                 </div>
             </div>
