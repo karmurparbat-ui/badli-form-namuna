@@ -7,13 +7,66 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Rasa:wght@500;600;700&display=swap" rel="stylesheet">
-    
-    <!-- ==================== તમામ જાવાસ્ક્રિપ્ટ ફંક્શન્સ (સૌથી ઉપર જેથી ક્યારેય કપાય નહીં) ==================== -->
+
     <script>
         const STORAGE_KEY = 'badli_camp_12pages_final_v5';
         let saveTimer;
 
-        // ૧. "સમજી ગયું" બટનથી ફોર્મ અનલોક કરવાનું ફંક્શન
+        // ===== યુઝર ટ્રેકિંગ / કાઉન્ટર =====
+        // Google Apps Script ની Web App URL અહીં પેસ્ટ કરો (https://script.google.com/macros/s/.../exec)
+        const TRACK_URL = 'https://script.google.com/macros/s/AKfycbwFwu9XQYDG8BE4hWSAhFiQAfnWNJ6KFX6UbkwekEOrM70favYMcIS3baXeZM-8nayf/exec';
+        const SAMPLE_NAME = 'પરબતભાઈ કરમુર';
+        const SAMPLE_SCHOOL = 'શ્રી કોરાડા વાડી પ્રાથમિક શાળા';
+        let trackTimer;
+
+        function getDeviceId() {
+            try {
+                let id = localStorage.getItem('badli_device_id');
+                if (!id) {
+                    id = 'D' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+                    localStorage.setItem('badli_device_id', id);
+                }
+                return id;
+            } catch (e) { return 'D' + Math.random().toString(36).slice(2, 10); }
+        }
+
+        function trackUsage(action) {
+            if (!TRACK_URL || TRACK_URL.indexOf('script.google.com') === -1) return;
+            try {
+                const get = k => (document.querySelector(`[data-bind="${k}"]`)?.value || '').trim();
+                const name = get('tName'), school = get('school');
+                const isSample = (name === SAMPLE_NAME && school === SAMPLE_SCHOOL) || !name;
+                if (isSample && action !== 'visit') return;
+                fetch(TRACK_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({
+                        deviceId: getDeviceId(),
+                        action: isSample ? 'visit' : action,
+                        name: isSample ? '' : name,
+                        school: isSample ? '' : school,
+                        taluka: get('taluka'),
+                        district: get('district')
+                    }),
+                    keepalive: true
+                });
+            } catch (e) {}
+        }
+
+        function trackDebounced() {
+            clearTimeout(trackTimer);
+            trackTimer = setTimeout(() => trackUsage('fill'), 4000);
+        }
+
+        function loadCounter() {
+            if (!TRACK_URL || TRACK_URL.indexOf('script.google.com') === -1) return;
+            fetch(TRACK_URL).then(r => r.json()).then(c => {
+                const b = document.getElementById('counterBadge');
+                if (b) b.textContent = `👥 કુલ વિઝિટ: ${c.total} | ✍️ ડેટા ભર્યો: ${c.filled} | 🖨️ પ્રિન્ટ: ${c.prints}`;
+            }).catch(() => {});
+        }
+
         function unlockFormNow() {
             const overlay = document.getElementById('welcomeOverlay');
             const wrapper = document.getElementById('mainAppWrapper');
@@ -29,26 +82,24 @@
             try { sessionStorage.setItem('badli_ack_done_v5', 'true'); } catch(e) {}
         }
 
-        // ૨. કલર અને બ્લેક & વ્હાઈટ પ્રિન્ટ ફંક્શન (ડાયરેક્ટ પ્રિન્ટ)
         function printDocs(mode) {
-            unlockFormNow(); // જો લોક હોય તો પહેલા અનલોક કરે
+            unlockFormNow();
             if (mode === 'bw') {
                 document.body.classList.add('bw-mode');
             } else {
                 document.body.classList.remove('bw-mode');
             }
+            trackUsage('print');
             window.focus();
             window.print();
         }
 
-        // ૩. તારીખ ફોર્મેટ (YYYY-MM-DD -> DD/MM/YYYY)
         function formatDateDMY(isoStr) {
             if (!isoStr) return '';
             const parts = isoStr.split('-');
             return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : isoStr;
         }
 
-        // ૪. બે તારીખ વચ્ચે વર્ષ, માસ, દિવસની ગણતરી
         function calcYMD(startStr, endStr, deductDays = 0) {
             if (!startStr || !endStr) return null;
             let start = new Date(startStr);
@@ -68,7 +119,6 @@
             return { y, m, d };
         }
 
-        // ૫. તમામ તારીખો અને નોકરીના ગાળાની ઓટોમેટિક ગણતરી
         function handleDateAndCalc() {
             document.querySelectorAll('[data-date]').forEach(inp => {
                 const key = inp.getAttribute('data-date');
@@ -133,7 +183,6 @@
             triggerAutoSave();
         }
 
-        // ૬. પેજ Show/Hide અને ટેબલ Row Add/Delete ફંક્શન્સ
         function togglePage(pageId, show) {
             const pg = document.getElementById(pageId);
             if (pg) pg.style.display = show ? 'block' : 'none';
@@ -185,7 +234,6 @@
             triggerAutoSave();
         }
 
-        // ૭. ઓટો-સેવ અને રીસેટ ફંક્શન્સ
         function triggerAutoSave() {
             clearTimeout(saveTimer);
             saveTimer = setTimeout(saveAllData, 350);
@@ -198,6 +246,7 @@
                 document.querySelectorAll('[data-date]').forEach(i => dateValues[i.getAttribute('data-date')] = i.value);
                 document.querySelectorAll('.page-chk').forEach(c => pageChecks[c.getAttribute('data-page')] = c.checked);
                 localStorage.setItem(STORAGE_KEY, JSON.stringify({ formValues, dateValues, pageChecks }));
+                trackDebounced();
                 const timeStr = new Date().toLocaleTimeString('gu-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 const badge = document.getElementById('saveStatus');
                 if (badge) badge.innerHTML = `✅ સેવ થયું: ${timeStr}`;
@@ -220,7 +269,6 @@
             }
         }
 
-        // ૮. પેજ ૫ થી ૯ (સ્વઘોષણાના ૫ પેજ) ડાયનેમિક રીતે જનરેટ કરવાનું ફંક્શન
         function buildDeclarationPages() {
             const declConfigs = [
                 {
@@ -284,7 +332,6 @@
             `).join('');
         }
 
-        // ૯. પેજ લોડ થાય ત્યારે ઇનિશિયલાઇઝેશન
         window.addEventListener('DOMContentLoaded', function() {
             buildDeclarationPages();
 
@@ -332,6 +379,8 @@
                 }
             } catch(e) {}
             handleDateAndCalc();
+            trackUsage('visit');
+            loadCounter();
         });
     </script>
 
@@ -354,10 +403,11 @@
         .welcome-box {
             background: #fff; max-width: 540px; width: 100%; border-radius: 14px;
             padding: 26px 22px; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.45);
-            border-top: 7px solid #1e3a8a;
+            border-top: 7px solid #1e3a8a; max-height: 95vh; overflow-y: auto;
         }
         .welcome-box h3 { margin: 0 0 12px 0; font-size: 24px; color: #1e3a8a; font-weight: 700; }
         .welcome-box p { font-size: 18px; line-height: 1.55; color: #1e293b; margin-bottom: 20px; }
+        .privacy-note { font-size: 15px !important; background: #f1f5f9; border-radius: 8px; padding: 8px 10px; color: #475569 !important; }
         .btn-ack {
             background: linear-gradient(135deg, #16a34a, #15803d); color: #fff; border: none;
             padding: 12px 30px; font-size: 19px; font-weight: 700; border-radius: 8px;
@@ -447,6 +497,34 @@
         body.bw-mode .dyn { color: #000 !important; }
         body.bw-mode .a4-page { filter: grayscale(100%); }
 
+
+        /* ===== જાહેરાત (દૈનિક રોજનીશી એપ) ===== */
+        .ad-banner {
+            max-width: 1150px; margin: 14px auto 0 auto; padding: 10px 16px;
+            background: linear-gradient(135deg, #fff7ed, #fef3c7); border: 2px solid #f59e0b;
+            border-radius: 12px; box-shadow: 0 3px 10px rgba(0,0,0,0.12);
+            display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+        }
+        .ad-banner .ad-text { flex: 1 1 320px; font-size: 16px; line-height: 1.45; color: #78350f; font-weight: 700; }
+        .ad-banner .ad-text small { display: block; font-size: 14px; color: #92400e; font-weight: 600; }
+        .ad-banner a.ad-btn {
+            background: linear-gradient(135deg, #16a34a, #15803d); color: #fff; text-decoration: none;
+            padding: 9px 18px; border-radius: 8px; font-size: 16px; font-weight: 700; white-space: nowrap;
+            box-shadow: 0 3px 8px rgba(22,163,74,0.4);
+        }
+        .ad-banner .ad-close { background: none; border: none; font-size: 20px; cursor: pointer; color: #92400e; padding: 0 4px; }
+        .ad-page .ad-head { text-align: center; font-size: 24px; font-weight: 700; color: #b91c1c; margin: 0 0 6px 0; line-height: 1.3; }
+        .ad-page .ad-title { text-align: center; font-size: 22px; font-weight: 700; color: var(--doc-heading); line-height: 1.35; margin-bottom: 4px; }
+        .ad-page .ad-sub { text-align: center; font-size: 18px; font-weight: 700; color: #15803d; margin-bottom: 10px; }
+        .ad-box { border: 2px solid var(--doc-border); border-radius: 10px; padding: 8px 14px; margin: 8px 0; background: #f8fafc; font-size: 17px; line-height: 1.7; }
+        .ad-box h4 { margin: 0 0 3px 0; font-size: 18px; color: var(--doc-heading); }
+        .ad-link { display: block; text-align: center; border: 2.5px dashed #16a34a; border-radius: 10px; padding: 10px 8px; margin: 8px 0; background: #f0fdf4; }
+        .ad-link a { color: #1d4ed8; font-size: 15.5px; font-weight: 700; word-break: break-all; text-decoration: underline; }
+        .ad-line { border: 0; border-top: 2px solid #94a3b8; margin: 8px 0; }
+        .ad-center { text-align: center; font-size: 17px; line-height: 1.7; }
+        .ad-warn { text-align: center; font-size: 16px; font-weight: 700; color: #b91c1c; margin-top: 4px; }
+        body.bw-mode .ad-page .ad-head, body.bw-mode .ad-page .ad-sub, body.bw-mode .ad-warn, body.bw-mode .ad-link a { color: #000; }
+
         @media (max-width: 820px) {
             .control-panel { margin: 8px; padding: 12px; }
             .form-grid, .page-toggles { grid-template-columns: 1fr; }
@@ -489,7 +567,6 @@
 </head>
 <body>
 
-<!-- વેલકમ નોટિફિકેશન -->
 <div class="welcome-overlay" id="welcomeOverlay">
     <div class="welcome-box">
         <h3>🔔 મહત્વપૂર્ણ સૂચના (નમૂના રૂપ ડેટા)</h3>
@@ -497,17 +574,19 @@
             આ ફોર્મમાં હાલમાં ભરેલો ડેટા માત્ર <b>નમૂના રૂપ (Sample Data)</b> છે.<br><br>
             તમે એકવાર તમામ ૧૨ પેજનો નમૂનો જોઈ લો, ત્યારબાદ જમણી તરફ ઉપરના કોર્નરમાં આપેલા લાલ રંગના <b>"🗑️ ડેટા રીસેટ / ક્લિયર"</b> ઓપ્શનથી ક્લિયર કરી તમારો ડેટા ભરી શકો છો.
         </p>
+        <p class="privacy-note">
+            🔒 ઉપયોગની ગણતરી માટે શિક્ષકનું નામ અને શાળાનું નામ નોંધવામાં આવે છે. બાકીનો તમામ ડેટા ફક્ત તમારા ફોનમાં જ રહે છે.
+        </p>
         <button type="button" class="btn-ack" onclick="unlockFormNow()">👍 સમજી ગયું (ફોર્મ ખોલો)</button>
     </div>
 </div>
 
 <div id="mainAppWrapper" class="app-locked">
 
-    <!-- ટોપ સ્ટીકી ટીકર અને ઓટો-સેવ બાર -->
     <div class="sticky-top-bar no-print">
         <div class="ticker-wrap">
             <div class="ticker-move">
-                🌟 સૌજન્ય: પરબતભાઈ કરમુર | શ્રી કોરાડા વાડી પ્રાથમિક શાળા | મોબાઈલ નંબર: 95863 11704 🌟 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 
+                🌟 સૌજન્ય: પરબતભાઈ કરમુર | શ્રી કોરાડા વાડી પ્રાથમિક શાળા | મોબાઈલ નંબર: 95863 11704 🌟 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
                 📌 જિલ્લા આંતરીક બદલી કેમ્પ પ્રમાણપત્રો (તમામ ૧૨ પેજ) - ઓટોમેટિક ડેટા અને તારીખ ગણતરી સાથેનું ડાયનેમિક ફોર્મ 📌
             </div>
         </div>
@@ -515,6 +594,7 @@
             <div style="font-size: 18px; font-weight: 700;">📑 જિલ્લા આંતરીક બદલી કેમ્પ (૧૨ પેજ જનરેટર)</div>
             <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center;">
                 <div class="save-badge" id="saveStatus">💾 ઓટો-સેવ સક્રિય</div>
+                <div class="save-badge" id="counterBadge" style="background:#7c3aed;">👥 કાઉન્ટર લોડ થાય છે...</div>
                 <button type="button" class="btn btn-color-print" onclick="printDocs('color')">🎨 કલર પ્રિન્ટ / PDF</button>
                 <button type="button" class="btn btn-bw-print" onclick="printDocs('bw')">⚫⚪ બ્લેક & વ્હાઈટ પ્રિન્ટ</button>
                 <button type="button" class="btn btn-reset-top" onclick="clearToBlankForm()">🗑️ ડેટા રીસેટ / ક્લિયર</button>
@@ -522,7 +602,16 @@
         </div>
     </div>
 
-    <!-- કંટ્રોલ પેનલ (ફોર્મ) -->
+    <!-- ટોપ જાહેરાત બેનર -->
+    <div class="ad-banner no-print" id="adBanner">
+        <div class="ad-text">
+            🎉📱 દૈનિક રોજનીશી હવે PLAY STORE પર! — Smart Daily Diary App, 100% FREE 💯
+            <small>✅ દૈનિક રોજનીશી PDF &nbsp;✅ Auto અભ્યાસક્રમ &nbsp;✅ Weekly Timetable &nbsp;✅ Holiday Management &nbsp;✅ Multi-Device Sync</small>
+        </div>
+        <a class="ad-btn" href="https://play.google.com/store/apps/details?id=com.karmurparbat.dainikrojnishi" target="_blank" rel="noopener">👇 Download કરો</a>
+        <button type="button" class="ad-close" title="બંધ કરો" onclick="document.getElementById('adBanner').style.display='none'">✖</button>
+    </div>
+
     <div class="control-panel no-print" id="formPanel">
 
         <div class="section-title">
@@ -545,6 +634,7 @@
             <label><input type="checkbox" class="page-chk" data-page="page10" checked onchange="togglePage('page10', this.checked)"> પેજ ૧૦: સેવા વૃતાંત</label>
             <label><input type="checkbox" class="page-chk" data-page="page11" checked onchange="togglePage('page11', this.checked)"> પેજ ૧૧: બિનપગારી રજા વિગત</label>
             <label><input type="checkbox" class="page-chk" data-page="page12" checked onchange="togglePage('page12', this.checked)"> પેજ ૧૨: મુ.શિ.શ્રીનો દાખલો</label>
+            <label><input type="checkbox" class="page-chk" data-page="page13" checked onchange="togglePage('page13', this.checked)"> પેજ ૧૩: એપ જાહેરાત (દૈનિક રોજનીશી)</label>
         </div>
 
         <div class="section-title">૨. શિક્ષક અને શાળાની મૂળભૂત માહિતી (ઓટોમેટિક તમામ પેજમાં લખાશે)</div>
@@ -602,7 +692,6 @@
         </div>
     </div>
 
-    <!-- ==================== ૧૨ A4 પેજ પ્રિવ્યુ કન્ટેનર ==================== -->
     <div class="preview-wrapper">
     <div class="preview-container" id="pagesContainer" contenteditable="true" oninput="triggerAutoSave()">
 
@@ -935,6 +1024,59 @@
                 <div class="sign-grid" style="margin-bottom: 15px; font-size: 17px;">
                     <div>તારીખ :- <span class="dyn" data-view="appDate">19/10/2026</span></div>
                     <div style="min-width: 220px;"><div class="sign-line">મુ.શિ.શ્રીની સહી/સિક્કો</div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- પેજ ૧૩: દૈનિક રોજનીશી એપ જાહેરાત (ઓટોમેટિક) -->
+        <div class="a4-page ad-page" id="page13">
+            <div class="ornate-border">
+                <span class="page-badge no-print">Page 13 (જાહેરાત)</span>
+                <div>
+                    <div class="ad-head">🚨 શિક્ષક મિત્રો માટે ખાસ જાહેરાત! 🚨</div>
+                    <div class="ad-title">🎉📱 દૈનિક રોજનીશી હવે PLAY STORE પર! 📱🎉</div>
+                    <div class="ad-sub">📚 Smart Daily Diary App — 100% FREE! 💯</div>
+
+                    <div class="ad-box">
+                        <h4>✨ મુખ્ય લાભો:</h4>
+                        ✅ દૈનિક રોજનીશી PDF<br>
+                        ✅ Auto અભ્યાસક્રમ + Offset<br>
+                        ✅ Weekly Timetable<br>
+                        ✅ Holiday Management<br>
+                        ✅ Multi-Device Sync
+                    </div>
+
+                    <div class="ad-link">
+                        <div style="font-size: 18px; color: #15803d; font-weight: 700;">👇 હમણાં જ Download કરો: 👇</div>
+                        🔗 <a href="https://play.google.com/store/apps/details?id=com.karmurparbat.dainikrojnishi" target="_blank" rel="noopener">https://play.google.com/store/apps/details?id=com.karmurparbat.dainikrojnishi</a>
+                    </div>
+
+                    <hr class="ad-line">
+
+                    <div class="ad-box">
+                        <h4>📚 વધુ સુવિધાઓ:</h4>
+                        🤖 <b>Auto અભ્યાસક્રમ</b> — Chapter + Lesson Positionનું Automatic Calculation<br>
+                        🕒 <b>Offset History</b> — કરેલા ફેરફારોની History<br>
+                        🏫 <b>ધોરણ 3 થી 8</b> માટે Support<br>
+                        📖 <b>13 Subjects</b> Support
+                    </div>
+
+                    <div class="ad-center" style="margin-top: 8px;">
+                        🎁 <b>100% FREE — કોઈ Subscription કે Hidden Charges નહીં!</b><br>
+                        📌 Google વડે Login કરો<br>
+                        ⏳ 1 દિવસમાં Free Tier Account Activate થઈ જશે.
+                    </div>
+
+                    <hr class="ad-line">
+
+                    <div class="ad-center">
+                        📢 <b>તમારા શિક્ષક મિત્રો સાથે આ મેસેજ જરૂર Forward કરો.</b> 🙏<br>
+                        💬 <b>મદદ માટે માત્ર WhatsApp:</b> 📱 <b>9586311704</b>
+                    </div>
+                    <div class="ad-warn">⚠️ કૃપા કરીને ફોન કૉલ કરશો નહીં. ફક્ત WhatsApp Message કરશો.</div>
+                </div>
+                <div class="ad-center" style="font-size: 19px; font-weight: 700; color: var(--doc-heading); margin-bottom: 6px;">
+                    👨‍🏫 દૈનિક રોજનીશી પરિવારમાં આપનું હાર્દિક સ્વાગત છે!
                 </div>
             </div>
         </div>
