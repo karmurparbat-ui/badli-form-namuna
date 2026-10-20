@@ -14,7 +14,7 @@
 
         // ===== યુઝર ટ્રેકિંગ / કાઉન્ટર =====
         // Google Apps Script ની Web App URL અહીં પેસ્ટ કરો (https://script.google.com/macros/s/.../exec)
-        const TRACK_URL = 'https://script.google.com/macros/s/AKfycbwFwu9XQYDG8BE4hWSAhFiQAfnWNJ6KFX6UbkwekEOrM70favYMcIS3baXeZM-8nayf/exec'';
+        const TRACK_URL = 'https://script.google.com/macros/s/AKfycbwFwu9XQYDG8BE4hWSAhFiQAfnWNJ6KFX6UbkwekEOrM70favYMcIS3baXeZM-8nayf/exec';
         const SAMPLE_NAME = 'પરબતભાઈ કરમુર';
         const SAMPLE_SCHOOL = 'શ્રી કોરાડા વાડી પ્રાથમિક શાળા';
         let trackTimer;
@@ -43,7 +43,7 @@
                     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify({
                         deviceId: getDeviceId(),
-                        action: isSample ? 'visit' : (action === 'visit' ? 'fill' : action),
+                        action: isSample ? 'visit' : action,
                         name: isSample ? '' : name,
                         school: isSample ? '' : school,
                         taluka: get('taluka'),
@@ -131,7 +131,6 @@
             const appDateVal = document.getElementById('appDateInput')?.value;
             const dobVal = document.getElementById('dobInput')?.value;
             const schoolJoinVal = document.getElementById('schoolJoinInput')?.value;
-            const seniorityVal = document.getElementById('seniorityDateInput')?.value;
             const relieveVal = document.getElementById('relieveDateInput')?.value;
 
             if (dobVal && appDateVal) {
@@ -159,8 +158,8 @@
             const totalCell = document.getElementById('totalLeaveDaysCell');
             if (totalCell) totalCell.textContent = totalLeave;
 
-            if (seniorityVal && appDateVal) {
-                const lenObj = calcYMD(seniorityVal, appDateVal, totalLeave);
+            if (schoolJoinVal && appDateVal) {
+                const lenObj = calcYMD(schoolJoinVal, appDateVal, totalLeave);
                 if (lenObj) {
                     document.getElementById('lenYInput').value = lenObj.y;
                     document.getElementById('lenMInput').value = lenObj.m;
@@ -662,7 +661,7 @@
             <div class="form-group"><label>સિનિયોરીટીની ગણતરી તારીખ:</label><input type="date" id="seniorityDateInput" data-date="seniorityDate" value="2023-01-01" onchange="handleDateAndCalc()"></div>
             <div class="form-group"><label>વધ પહેલાની શાળા દાખલ તારીખ:</label><input type="date" id="surplusDateInput" data-date="surplusDate" onchange="handleDateAndCalc()"></div>
             <div class="form-group"><label>શાળામાંથી છૂટા થયા તારીખ (પેજ ૧૨):</label><input type="date" id="relieveDateInput" data-date="relieveDate" value="2026-10-19" onchange="handleDateAndCalc()"></div>
-            <div class="form-group"><label>નોકરીની લંબાઈ (સિનિયોરીટી તારીખથી) [ઓટો]:</label>
+            <div class="form-group"><label>નોકરીની લંબાઈ (વર્ષ-માસ-દિવસ) [ઓટો]:</label>
                 <div style="display:flex; gap:5px;">
                     <input type="text" id="lenYInput" data-bind="lenY" style="width:33%">
                     <input type="text" id="lenMInput" data-bind="lenM" style="width:33%">
